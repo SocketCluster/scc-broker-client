@@ -10,7 +10,7 @@ module.exports.version = '1.0.0';
 module.exports.attach = function (broker, options) {
   var clusterClient = new SCClusterBrokerClient();
   var lastestSnapshotTime = -1;
-  var serverInstances = {};
+  var serverInstances = [];
 
   // TODO: Publish and subscribe to/from channels using clusterClient (relay channels)
 
@@ -18,7 +18,9 @@ module.exports.attach = function (broker, options) {
     if (updatePacket.time > lastestSnapshotTime) {
       serverInstances = updatePacket.serverInstances;
       lastestSnapshotTime = updatePacket.time;
+      return true;
     }
+    return false;
   };
 
   var scStateSocketOptions = {
@@ -33,12 +35,18 @@ module.exports.attach = function (broker, options) {
   stateSocket.on('serverJoinCluster', function (data) {
     // TODO: Subscribe to channels on updated server instances, keep old subscriptions
     // Then trigger a state change 'updatedSubs:xxx' for this client.
-    updateServerCluster(data);
+    var updated = updateServerCluster(data);
+    if (updated) {
+      var mapper = function (channelName) {
+        // TODO: Return a URI based on hash of channelName
+      };
+      clusterClient.subMapperPush(mapper, serverInstances);
+    }
   });
   stateSocket.on('serverLeaveCluster', function (data) {
     // TODO: Subscribe to channels on updated server instances, keep old subscriptions
     // Then trigger a state change 'updatedSubs:xxx' for this client.
-    updateServerCluster(data);
+    var updated = updateServerCluster(data);
   });
 
   stateSocket.on('clientStatesConverge', function (data) {
@@ -53,7 +61,7 @@ module.exports.attach = function (broker, options) {
   });
 
   stateSocket.emit('clientJoinCluster', stateSocketData, function (err, data) {
-    updateServerCluster(data);
+    var updated = updateServerCluster(data);
     // TODO: Subscribe to channels on server instances
   });
 };
