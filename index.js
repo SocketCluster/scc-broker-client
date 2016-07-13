@@ -32,36 +32,57 @@ module.exports.attach = function (broker, options) {
     instanceId: broker.instanceId
   };
 
-  stateSocket.on('serverJoinCluster', function (data) {
-    // TODO: Subscribe to channels on updated server instances, keep old subscriptions
-    // Then trigger a state change 'updatedSubs:xxx' for this client.
+
+  var getMapper = function (serverInstances) {
+    return function (channelName) {
+      var ch;
+      var hash = channelName;
+
+      for (var i = 0; i < channelName.length; i++) {
+        ch = channelName.charCodeAt(i);
+        hash = ((hash << 5) - hash) + ch;
+        hash = hash & hash;
+      }
+      var targetIndex = Math.abs(hash) % serverInstances.length;
+      return serverInstances[targetIndex];
+    };
+  };
+
+  var sendClientState = function (stateName) {
+    stateSocket.emit('clientSetState', {
+      instanceState: stateName + ':' + JSON.stringify(serverInstances)
+    });
+  };
+
+  var addNewSubMapping = function (data) {
     var updated = updateServerCluster(data);
     if (updated) {
-      var mapper = function (channelName) {
-        // TODO: Return a URI based on hash of channelName
-      };
+      var mapper = getMapper(serverInstances);
       clusterClient.subMapperPush(mapper, serverInstances);
+      sendClientState('updatedSubs');
     }
-  });
-  stateSocket.on('serverLeaveCluster', function (data) {
-    // TODO: Subscribe to channels on updated server instances, keep old subscriptions
-    // Then trigger a state change 'updatedSubs:xxx' for this client.
-    var updated = updateServerCluster(data);
-  });
+  };
+
+  stateSocket.on('serverJoinCluster', addNewSubMapping);
+  stateSocket.on('serverLeaveCluster', addNewSubMapping);
 
   stateSocket.on('clientStatesConverge', function (data) {
     if (data.state == 'updatedSubs:' + JSON.stringify(serverInstances)) {
-      // This will run when all clients are subscribed to channels based on the new server instances mapping.
-      // TODO: From now on, only publish based on the new mapping
-      // then notify the cluster state server that this instance has updated its pubs.
+      var mapper = getMapper(serverInstances);
+      clusterClient.pubMapperPush(mapper, serverInstances);
+      clusterClient.pubMapperShift(mapper);
+      sendClientState('updatedPubs');
     } else if (data.state == 'updatedPubs:' + JSON.stringify(serverInstances)) {
-      // This will run when all clients are publishing based on the new server instances mapping.
-      // TODO: Remove subscriptions which were based on the old mapping.
+      clusterClient.subMapperShift();
+      sendClientState('active');
     }
   });
 
   stateSocket.emit('clientJoinCluster', stateSocketData, function (err, data) {
-    var updated = updateServerCluster(data);
-    // TODO: Subscribe to channels on server instances
+    updateServerCluster(data);
+    var mapper = getMapper(serverInstances);
+    clusterClient.subMapperPush(mapper, serverInstances);
+    clusterClient.pubMapperPush(mapper, serverInstances);
+    sendClientState('active');
   });
 };
