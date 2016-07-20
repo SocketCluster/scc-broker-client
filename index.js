@@ -4,6 +4,7 @@ var uuid = require('node-uuid');
 
 var DEFAULT_PORT = 7777;
 var DEFAULT_MESSAGE_CACHE_DURATION = 10000;
+var DEFAULT_RETRY_DELAY = 2000;
 
 // The options object needs to have a stateServerHost property.
 module.exports.attach = function (broker, options) {
@@ -11,7 +12,8 @@ module.exports.attach = function (broker, options) {
   var lastestSnapshotTime = -1;
   var serverInstances = [];
   var processedMessagesLookup = {};
-  var messageCacheDuration = options.messageCacheDuration || DEFAULT_MESSAGE_CACHE_DURATION;
+  var messageCacheDuration = options.brokerMessageCacheDuration || DEFAULT_MESSAGE_CACHE_DURATION;
+  var retryDelay = options.brokerRetryDelay || DEFAULT_RETRY_DELAY;
 
   var updateServerCluster = function (updatePacket) {
     if (updatePacket.time > lastestSnapshotTime) {
@@ -31,7 +33,6 @@ module.exports.attach = function (broker, options) {
     instanceId: broker.instanceId
   };
 
-
   var getMapper = function (serverInstances) {
     return function (channelName) {
       var ch;
@@ -47,9 +48,16 @@ module.exports.attach = function (broker, options) {
     };
   };
 
+  var sendClientStateTimeout = -1;
+
   var sendClientState = function (stateName) {
+    clearTimeout(sendClientStateTimeout);
     stateSocket.emit('clientSetState', {
       instanceState: stateName + ':' + JSON.stringify(serverInstances)
+    }, (err) => {
+      if (err) {
+        sendClientStateTimeout = setTimeout(sendClientState.bind(this, stateName), retryDelay);
+      }
     });
   };
 
@@ -90,13 +98,20 @@ module.exports.attach = function (broker, options) {
     respond();
   });
 
-  stateSocket.emit('clientJoinCluster', stateSocketData, function (err, data) {
-    updateServerCluster(data);
-    var mapper = getMapper(serverInstances);
-    clusterClient.subMapperPush(mapper, serverInstances);
-    clusterClient.pubMapperPush(mapper, serverInstances);
-    sendClientState('active');
-  });
+  var emitClientJoinCluster = function () {
+    stateSocket.emit('clientJoinCluster', stateSocketData, function (err, data) {
+      if (err) {
+        setTimeout(emitClientJoinCluster, retryDelay);
+        return;
+      }
+      updateServerCluster(data);
+      var mapper = getMapper(serverInstances);
+      clusterClient.subMapperPush(mapper, serverInstances);
+      clusterClient.pubMapperPush(mapper, serverInstances);
+      sendClientState('active');
+    });
+  };
+  emitClientJoinCluster();
 
   var removeMessageFromCache = function (messageId) {
     delete processedMessagesLookup[messageId];
