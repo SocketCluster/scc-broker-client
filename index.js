@@ -1,18 +1,17 @@
 var scClient = require('socketcluster-client');
-var SCClusterBrokerClient = require('./cluster-broker-client').SCClusterBrokerClient;
+var ClusterBrokerClient = require('./cluster-broker-client').ClusterBrokerClient;
+var uuid = require('node-uuid');
 
-module.exports.version = '1.0.0';
+var DEFAULT_PORT = 7777;
+var DEFAULT_MESSAGE_CACHE_DURATION = 10000;
 
-// TODO: When receiving messages from channels, check the UUID to make sure that
-// each message is only processed once (particularly during a mapping transition).
-// Also, make sure to only consider the servernInstances with the latest timestamp.
-
+// The options object needs to have a stateServerHost property.
 module.exports.attach = function (broker, options) {
-  var clusterClient = new SCClusterBrokerClient();
+  var clusterClient = new ClusterBrokerClient();
   var lastestSnapshotTime = -1;
   var serverInstances = [];
-
-  // TODO: Publish and subscribe to/from channels using clusterClient (relay channels)
+  var processedMessagesLookup = {};
+  var messageCacheDuration = options.messageCacheDuration || DEFAULT_MESSAGE_CACHE_DURATION;
 
   var updateServerCluster = function (updatePacket) {
     if (updatePacket.time > lastestSnapshotTime) {
@@ -24,8 +23,8 @@ module.exports.attach = function (broker, options) {
   };
 
   var scStateSocketOptions = {
-    hostname: '127.0.0.1', // TODO
-    port: 7777 // TODO
+    hostname: options.stateServerHost, // Required option
+    port: options.stateServerPort || DEFAULT_PORT
   };
   var stateSocket = scClient.connect(scStateSocketOptions);
   var stateSocketData = {
@@ -54,28 +53,41 @@ module.exports.attach = function (broker, options) {
     });
   };
 
-  var addNewSubMapping = function (data) {
+  var addNewSubMapping = function (data, respond) {
     var updated = updateServerCluster(data);
     if (updated) {
       var mapper = getMapper(serverInstances);
       clusterClient.subMapperPush(mapper, serverInstances);
       sendClientState('updatedSubs');
     }
+    respond();
+  };
+
+  var completeMappingUpdates = function () {
+    // This means that all clients have converged on the 'ready' state
+    // When this happens, we can remove all mappings except for the latest one.
+    while (clusterClient.pubMappers.length > 1) {
+      clusterClient.pubMapperShift();
+    }
+    while (clusterClient.subMappers.length > 1) {
+      clusterClient.subMapperShift();
+    }
+    sendClientState('active');
   };
 
   stateSocket.on('serverJoinCluster', addNewSubMapping);
   stateSocket.on('serverLeaveCluster', addNewSubMapping);
 
-  stateSocket.on('clientStatesConverge', function (data) {
+  stateSocket.on('clientStatesConverge', function (data, respond) {
     if (data.state == 'updatedSubs:' + JSON.stringify(serverInstances)) {
       var mapper = getMapper(serverInstances);
       clusterClient.pubMapperPush(mapper, serverInstances);
       clusterClient.pubMapperShift(mapper);
       sendClientState('updatedPubs');
     } else if (data.state == 'updatedPubs:' + JSON.stringify(serverInstances)) {
-      clusterClient.subMapperShift();
-      sendClientState('active');
+      completeMappingUpdates();
     }
+    respond();
   });
 
   stateSocket.emit('clientJoinCluster', stateSocketData, function (err, data) {
@@ -84,5 +96,36 @@ module.exports.attach = function (broker, options) {
     clusterClient.subMapperPush(mapper, serverInstances);
     clusterClient.pubMapperPush(mapper, serverInstances);
     sendClientState('active');
+  });
+
+  var removeMessageFromCache = function (messageId) {
+    delete processedMessagesLookup[messageId];
+  };
+
+  var clusterMessageHandler = function (channelName, packet) {
+    if (packet.sender == null || packet.sender != broker.instanceId) {
+      if (processedMessagesLookup[packet.id] == null) {
+        broker.publish(channelName, packet.data);
+      } else {
+        clearTimeout(processedMessagesLookup[packet.id]);
+      }
+      processedMessagesLookup[packet.id] = setTimeout(removeMessageFromCache.bind(null, packet.id), messageCacheDuration);
+    }
+  };
+  clusterClient.on('message', clusterMessageHandler);
+
+  broker.on('subscribe', function (channelName) {
+    clusterClient.subscribe(channelName);
+  });
+  broker.on('unsubscribe', function (channelName) {
+    clusterClient.unsubscribe(channelName);
+  });
+  broker.on('publish', function (channelName, data) {
+    var packet = {
+      sender: broker.instanceId || null,
+      data: data,
+      id: uuid.v4()
+    };
+    clusterClient.publish(channelName, packet);
   });
 };

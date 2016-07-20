@@ -1,15 +1,22 @@
 var url = require('url');
 var scClient = require('socketcluster-client');
+var EventEmitter = require('events').EventEmitter;
+
+var trailingPortNumberRegex = /:[0-9]+$/
 
 var ClusterBrokerClient = function () {
+  EventEmitter.call(this);
   this.subMappers = [];
   this.pubMappers = [];
 };
 
+ClusterBrokerClient.prototype = Object.create(EventEmitter.prototype);
+
 ClusterBrokerClient.prototype.breakDownURI = function (uri) {
   var parsedURI = url.parse(uri);
+  var hostname = parsedURI.host.replace(trailingPortNumberRegex, '');
   var result = {
-    hostname: parsedURI.hostname,
+    hostname: hostname,
     port: parsedURI.port
   };
   if (parsedURI.protocol == 'wss:' || parsedURI.protocol == 'https:') {
@@ -42,10 +49,11 @@ ClusterBrokerClient.prototype.getAllSubscriptions = function () {
   var channelsLookup = {};
   var subscriptions = [];
   this.subMappers.forEach((mapperContext) => {
-    mapperContext.targets.forEach((client) => {
-      if (!visitedClientsLookup[client.targetURI]) {
-        visitedClientsLookup[client.targetURI] = true;
-        var subs = client.getSubscriptions(true);
+    Object.keys(mapperContext.targets).forEach((clientURI) => {
+      var client = mapperContext.targets[clientURI];
+      if (!visitedClientsLookup[clientURI]) {
+        visitedClientsLookup[clientURI] = true;
+        var subs = client.subscriptions(true);
         subs.forEach((channelName) => {
           if (!channelsLookup[channelName]) {
             channelsLookup[channelName] = true;
@@ -68,8 +76,8 @@ ClusterBrokerClient.prototype.subMapperPush = function (mapper, targetURIs) {
 };
 
 ClusterBrokerClient.prototype.subMapperShift = function () {
-  var oldMapperContext = this.subMappers.shift();
   var activeChannels = this.getAllSubscriptions();
+  var oldMapperContext = this.subMappers.shift();
   activeChannels.forEach((channelName) => {
     this._unsubscribeWithMapperContext(oldMapperContext, channelName);
   });
@@ -99,13 +107,27 @@ ClusterBrokerClient.prototype._unsubscribeWithMapperContext = function (mapperCo
   if (isLastRemainingMappingForClient) {
     var targetClient = mapperContext.targets[targetURI];
     targetClient.unsubscribe(channelName);
+    targetClient.unwatch(channelName);
   }
+};
+
+ClusterBrokerClient.prototype.unsubscribe = function (channelName) {
+  this.subMappers.forEach((mapperContext) => {
+    this._unsubscribeWithMapperContext(mapperContext, channelName);
+  });
+};
+
+ClusterBrokerClient.prototype._handleChannelMessage = function (channelName, packet) {
+  this.emit('message', channelName, packet);
 };
 
 ClusterBrokerClient.prototype._subscribeWithMapperContext = function (mapperContext, channelName) {
   var targetURI = mapperContext.mapper(channelName);
   var targetClient = mapperContext.targets[targetURI];
   targetClient.subscribe(channelName);
+  if (!targetClient.watchers(channelName).length) {
+    targetClient.watch(channelName, this._handleChannelMessage.bind(this, channelName));
+  }
 };
 
 ClusterBrokerClient.prototype.subscribe = function (channelName) {
