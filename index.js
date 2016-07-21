@@ -8,7 +8,7 @@ var DEFAULT_RETRY_DELAY = 2000;
 
 // The options object needs to have a stateServerHost property.
 module.exports.attach = function (broker, options) {
-  var clusterClient = new ClusterBrokerClient();
+  var clusterClient = new ClusterBrokerClient(broker);
   var lastestSnapshotTime = -1;
   var serverInstances = [];
   var processedMessagesLookup = {};

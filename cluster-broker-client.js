@@ -4,13 +4,22 @@ var EventEmitter = require('events').EventEmitter;
 
 var trailingPortNumberRegex = /:[0-9]+$/
 
-var ClusterBrokerClient = function () {
+var ClusterBrokerClient = function (broker) {
   EventEmitter.call(this);
   this.subMappers = [];
   this.pubMappers = [];
+  this.broker = broker;
 };
 
 ClusterBrokerClient.prototype = Object.create(EventEmitter.prototype);
+
+ClusterBrokerClient.prototype.errors = {
+  NoMatchingTargetError: function (channelName) {
+    var err = new Error(`Could not find a matching target server for the ${channelName} channel - The server may have gone down recently.`);
+    err.name = 'NoMatchingTargetError';
+    return err;
+  }
+};
 
 ClusterBrokerClient.prototype.breakDownURI = function (uri) {
   var parsedURI = url.parse(uri);
@@ -44,6 +53,18 @@ ClusterBrokerClient.prototype._mapperPush = function (mapperList, mapper, target
   return mapperContext;
 };
 
+ClusterBrokerClient.prototype._getAllBrokerSubscriptions = function () {
+  var channelMap = {};
+  var workerChannelMaps = Object.keys(this.broker.subscriptions);
+  workerChannelMaps.forEach((index) => {
+    var workerChannels = Object.keys(this.broker.subscriptions[index]);
+    workerChannels.forEach((channelName) => {
+      channelMap[channelName] = true;
+    });
+  });
+  return Object.keys(channelMap);
+};
+
 ClusterBrokerClient.prototype.getAllSubscriptions = function () {
   var visitedClientsLookup = {};
   var channelsLookup = {};
@@ -62,6 +83,13 @@ ClusterBrokerClient.prototype.getAllSubscriptions = function () {
         });
       }
     });
+  });
+
+  var localBrokerSubscriptions = this._getAllBrokerSubscriptions();
+  localBrokerSubscriptions.forEach((channelName) => {
+    if (!channelsLookup[channelName]) {
+      subscriptions.push(channelName);
+    }
   });
   return subscriptions;
 };
@@ -93,21 +121,26 @@ ClusterBrokerClient.prototype.pubMapperShift = function () {
 
 ClusterBrokerClient.prototype._unsubscribeWithMapperContext = function (mapperContext, channelName) {
   var targetURI = mapperContext.mapper(channelName);
-  var isLastRemainingMappingForClient = true;
+  if (targetURI) {
+    var isLastRemainingMappingForClient = true;
 
-  // If any other subscription mappers map to this client for this channel,
-  // then don't unsubscribe.
-  this.subMappers.forEach((subMapperContext) => {
-    var subTargetURI = subMapperContext.mapper(channelName);
-    if (targetURI == subTargetURI) {
-      isLastRemainingMappingForClient = false;
-      return;
+    // If any other subscription mappers map to this client for this channel,
+    // then don't unsubscribe.
+    this.subMappers.forEach((subMapperContext) => {
+      var subTargetURI = subMapperContext.mapper(channelName);
+      if (targetURI == subTargetURI) {
+        isLastRemainingMappingForClient = false;
+        return;
+      }
+    });
+    if (isLastRemainingMappingForClient) {
+      var targetClient = mapperContext.targets[targetURI];
+      targetClient.unsubscribe(channelName);
+      targetClient.unwatch(channelName);
     }
-  });
-  if (isLastRemainingMappingForClient) {
-    var targetClient = mapperContext.targets[targetURI];
-    targetClient.unsubscribe(channelName);
-    targetClient.unwatch(channelName);
+  } else {
+    var err = this.errors['NoMatchingTargetError'](channelName);
+    this.emit('error', err);
   }
 };
 
@@ -123,10 +156,15 @@ ClusterBrokerClient.prototype._handleChannelMessage = function (channelName, pac
 
 ClusterBrokerClient.prototype._subscribeWithMapperContext = function (mapperContext, channelName) {
   var targetURI = mapperContext.mapper(channelName);
-  var targetClient = mapperContext.targets[targetURI];
-  targetClient.subscribe(channelName);
-  if (!targetClient.watchers(channelName).length) {
-    targetClient.watch(channelName, this._handleChannelMessage.bind(this, channelName));
+  if (targetURI) {
+    var targetClient = mapperContext.targets[targetURI];
+    targetClient.subscribe(channelName);
+    if (!targetClient.watchers(channelName).length) {
+      targetClient.watch(channelName, this._handleChannelMessage.bind(this, channelName));
+    }
+  } else {
+    var err = this.errors['NoMatchingTargetError'](channelName);
+    this.emit('error', err);
   }
 };
 
@@ -138,8 +176,13 @@ ClusterBrokerClient.prototype.subscribe = function (channelName) {
 
 ClusterBrokerClient.prototype._publishWithMapperContext = function (mapperContext, channelName, data) {
   var targetURI = mapperContext.mapper(channelName);
-  var targetClient = mapperContext.targets[targetURI];
-  targetClient.publish(channelName, data);
+  if (targetURI) {
+    var targetClient = mapperContext.targets[targetURI];
+    targetClient.publish(channelName, data);
+  } else {
+    var err = this.errors['NoMatchingTargetError'](channelName);
+    this.emit('error', err);
+  }
 };
 
 ClusterBrokerClient.prototype.publish = function (channelName, data) {
