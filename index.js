@@ -9,6 +9,10 @@ var DEFAULT_RETRY_DELAY = 2000;
 // The options object needs to have a stateServerHost property.
 module.exports.attach = function (broker, options) {
   var clusterClient = new ClusterBrokerClient(broker);
+  clusterClient.on('error', function (err) {
+    console.error(err);
+  });
+
   var lastestSnapshotTime = -1;
   var serverInstances = [];
   var processedMessagesLookup = {};
@@ -29,6 +33,10 @@ module.exports.attach = function (broker, options) {
     port: options.stateServerPort || DEFAULT_PORT
   };
   var stateSocket = scClient.connect(scStateSocketOptions);
+  stateSocket.on('error', function (err) {
+    console.error(err);
+  });
+
   var stateSocketData = {
     instanceId: broker.instanceId
   };

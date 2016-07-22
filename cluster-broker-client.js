@@ -9,6 +9,11 @@ var ClusterBrokerClient = function (broker) {
   this.subMappers = [];
   this.pubMappers = [];
   this.broker = broker;
+  this.targetClients = {};
+
+  this._handleClientError = (err) => {
+    this.emit('error', err);
+  };
 };
 
 ClusterBrokerClient.prototype = Object.create(EventEmitter.prototype);
@@ -40,8 +45,10 @@ ClusterBrokerClient.prototype._mapperPush = function (mapperList, mapper, target
   targetURIs.forEach((clientURI) => {
     var clientConnectOptions = this.breakDownURI(clientURI);
     var client = scClient.connect(clientConnectOptions);
+    client.on('error', this._handleClientError);
     client.targetURI = clientURI;
     targets[clientURI] = client;
+    this.targetClients[clientURI] = client;
   });
 
   var mapperContext = {
@@ -94,6 +101,29 @@ ClusterBrokerClient.prototype.getAllSubscriptions = function () {
   return subscriptions;
 };
 
+ClusterBrokerClient.prototype._cleanupUnusedTargetSockets = function () {
+  var requiredClients = {};
+  this.subMappers.forEach((subMapperContext) => {
+    var subMapperTargetURIs = Object.keys(subMapperContext.targets);
+    subMapperTargetURIs.forEach((uri) => {
+      requiredClients[uri] = true;
+    });
+  });
+  this.pubMappers.forEach((pubMapperContext) => {
+    var pubMapperTargetURIs = Object.keys(pubMapperContext.targets);
+    pubMapperTargetURIs.forEach((uri) => {
+      requiredClients[uri] = true;
+    });
+  });
+  var targetClientURIs = Object.keys(this.targetClients);
+  targetClientURIs.forEach((targetURI) => {
+    if (!requiredClients[targetURI]) {
+      this.targetClients[targetURI].disconnect();
+      delete this.targetClients[targetURI];
+    }
+  });
+};
+
 ClusterBrokerClient.prototype.subMapperPush = function (mapper, targetURIs) {
   var mapperContext = this._mapperPush(this.subMappers, mapper, targetURIs);
   var activeChannels = this.getAllSubscriptions();
@@ -109,6 +139,7 @@ ClusterBrokerClient.prototype.subMapperShift = function () {
   activeChannels.forEach((channelName) => {
     this._unsubscribeWithMapperContext(oldMapperContext, channelName);
   });
+  this._cleanupUnusedTargetSockets();
 };
 
 ClusterBrokerClient.prototype.pubMapperPush = function (mapper, targetURIs) {
@@ -117,23 +148,24 @@ ClusterBrokerClient.prototype.pubMapperPush = function (mapper, targetURIs) {
 
 ClusterBrokerClient.prototype.pubMapperShift = function () {
   this.pubMappers.shift();
+  this._cleanupUnusedTargetSockets();
 };
 
 ClusterBrokerClient.prototype._unsubscribeWithMapperContext = function (mapperContext, channelName) {
   var targetURI = mapperContext.mapper(channelName);
   if (targetURI) {
-    var isLastRemainingMappingForClient = true;
+    var isLastRemainingMappingForClientForCurrentChannel = true;
 
     // If any other subscription mappers map to this client for this channel,
     // then don't unsubscribe.
     this.subMappers.forEach((subMapperContext) => {
       var subTargetURI = subMapperContext.mapper(channelName);
       if (targetURI == subTargetURI) {
-        isLastRemainingMappingForClient = false;
+        isLastRemainingMappingForClientForCurrentChannel = false;
         return;
       }
     });
-    if (isLastRemainingMappingForClient) {
+    if (isLastRemainingMappingForClientForCurrentChannel) {
       var targetClient = mapperContext.targets[targetURI];
       targetClient.unsubscribe(channelName);
       targetClient.unwatch(channelName);
