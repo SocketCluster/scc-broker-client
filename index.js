@@ -6,6 +6,11 @@ var DEFAULT_PORT = 7777;
 var DEFAULT_MESSAGE_CACHE_DURATION = 10000;
 var DEFAULT_RETRY_DELAY = 2000;
 
+var RECONNECT_RANDOMNESS = 1000;
+
+var STATE_SERVER_CONNECT_TIMEOUT = Number(process.env.SC_CLUSTER_STATE_SERVER_CONNECT_TIMEOUT) || 3000;
+var STATE_SERVER_ACK_TIMEOUT = Number(process.env.SC_CLUSTER_STATE_SERVER_ACK_TIMEOUT) || 2000;
+
 // The options object needs to have a stateServerHost property.
 module.exports.attach = function (broker, options) {
   var clusterClient = new ClusterBrokerClient(broker);
@@ -30,7 +35,15 @@ module.exports.attach = function (broker, options) {
 
   var scStateSocketOptions = {
     hostname: options.stateServerHost, // Required option
-    port: options.stateServerPort || DEFAULT_PORT
+    port: options.stateServerPort || DEFAULT_PORT,
+    connectTimeout: STATE_SERVER_CONNECT_TIMEOUT,
+    ackTimeout: STATE_SERVER_ACK_TIMEOUT,
+    autoReconnectOptions: {
+      initialDelay: retryDelay,
+      randomness: RECONNECT_RANDOMNESS,
+      multiplier: 1,
+      maxDelay: retryDelay + RECONNECT_RANDOMNESS
+    }
   };
   var stateSocket = scClient.connect(scStateSocketOptions);
   stateSocket.on('error', function (err) {
@@ -119,7 +132,7 @@ module.exports.attach = function (broker, options) {
       sendClientState('active');
     });
   };
-  emitClientJoinCluster();
+  stateSocket.on('connect', emitClientJoinCluster);
 
   var removeMessageFromCache = function (messageId) {
     delete processedMessagesLookup[messageId];
