@@ -4,12 +4,13 @@ var EventEmitter = require('events').EventEmitter;
 
 var trailingPortNumberRegex = /:[0-9]+$/
 
-var ClusterBrokerClient = function (broker) {
+var ClusterBrokerClient = function (broker, options) {
   EventEmitter.call(this);
   this.subMappers = [];
   this.pubMappers = [];
   this.broker = broker;
   this.targetClients = {};
+  this.authKey = options.authKey || null;
 
   this._handleClientError = (err) => {
     this.emit('error', err);
@@ -44,6 +45,9 @@ ClusterBrokerClient.prototype._mapperPush = function (mapperList, mapper, target
 
   targetURIs.forEach((clientURI) => {
     var clientConnectOptions = this.breakDownURI(clientURI);
+    clientConnectOptions.query = {
+      authKey: this.authKey
+    };
     var client = scClient.connect(clientConnectOptions);
     client.on('error', this._handleClientError);
     client.targetURI = clientURI;

@@ -5,15 +5,17 @@ var uuid = require('node-uuid');
 var DEFAULT_PORT = 7777;
 var DEFAULT_MESSAGE_CACHE_DURATION = 10000;
 var DEFAULT_RETRY_DELAY = 2000;
+var DEFAULT_STATE_SERVER_CONNECT_TIMEOUT = 3000;
+var DEFAULT_STATE_SERVER_ACK_TIMEOUT = 2000;
 
-var RECONNECT_RANDOMNESS = 1000;
-
-var STATE_SERVER_CONNECT_TIMEOUT = Number(process.env.SC_CLUSTER_STATE_SERVER_CONNECT_TIMEOUT) || 3000;
-var STATE_SERVER_ACK_TIMEOUT = Number(process.env.SC_CLUSTER_STATE_SERVER_ACK_TIMEOUT) || 2000;
+var DEFAULT_RECONNECT_RANDOMNESS = 1000;
 
 // The options object needs to have a stateServerHost property.
 module.exports.attach = function (broker, options) {
-  var clusterClient = new ClusterBrokerClient(broker);
+  var reconnectRandomness = options.stateServerReconnectRandomness || DEFAULT_RECONNECT_RANDOMNESS;
+  var authKey = options.authKey || null;
+
+  var clusterClient = new ClusterBrokerClient(broker, {authKey: authKey});
   clusterClient.on('error', function (err) {
     console.error(err);
   });
@@ -36,13 +38,16 @@ module.exports.attach = function (broker, options) {
   var scStateSocketOptions = {
     hostname: options.stateServerHost, // Required option
     port: options.stateServerPort || DEFAULT_PORT,
-    connectTimeout: STATE_SERVER_CONNECT_TIMEOUT,
-    ackTimeout: STATE_SERVER_ACK_TIMEOUT,
+    connectTimeout: options.stateServerConnectTimeout || DEFAULT_STATE_SERVER_CONNECT_TIMEOUT,
+    ackTimeout: options.stateServerAckTimeout || DEFAULT_STATE_SERVER_ACK_TIMEOUT,
     autoReconnectOptions: {
       initialDelay: retryDelay,
-      randomness: RECONNECT_RANDOMNESS,
+      randomness: reconnectRandomness,
       multiplier: 1,
-      maxDelay: retryDelay + RECONNECT_RANDOMNESS
+      maxDelay: retryDelay + reconnectRandomness
+    },
+    query: {
+      authKey: authKey
     }
   };
   var stateSocket = scClient.connect(scStateSocketOptions);
