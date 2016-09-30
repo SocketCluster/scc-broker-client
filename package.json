@@ -12,7 +12,7 @@
   },
   "dependencies": {
     "node-uuid": "1.4.7",
-    "socketcluster-client": "4.x.x"
+    "socketcluster-client": "5.x.x"
   },
   "keywords": [
     "SocketCluster",
