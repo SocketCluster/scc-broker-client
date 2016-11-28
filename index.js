@@ -182,13 +182,22 @@ module.exports.attach = function (broker, options) {
   };
 
   broker.on('publish', function (channelName, data) {
-    if (!publishOutboundBuffer[channelName]) {
-      publishOutboundBuffer[channelName] = [];
-    }
-    publishOutboundBuffer[channelName].push(data);
+    if (broker.options.pubSubBatchDuration == null) {
+      var packet = {
+        sender: broker.instanceId || null,
+        messages: [data],
+        id: uuid.v4()
+      };
+      clusterClient.publish(channelName, packet);
+    } else {
+      if (!publishOutboundBuffer[channelName]) {
+        publishOutboundBuffer[channelName] = [];
+      }
+      publishOutboundBuffer[channelName].push(data);
 
-    if (!publishTimeout) {
-      publishTimeout = setTimeout(flushPublishOutboundBuffer, broker.options.pubSubBatchDuration);
+      if (!publishTimeout) {
+        publishTimeout = setTimeout(flushPublishOutboundBuffer, broker.options.pubSubBatchDuration);
+      }
     }
   });
 };
