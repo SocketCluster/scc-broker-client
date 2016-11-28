@@ -144,9 +144,11 @@ module.exports.attach = function (broker, options) {
   };
 
   var clusterMessageHandler = function (channelName, packet) {
-    if (packet.sender == null || packet.sender != broker.instanceId) {
+    if ((packet.sender == null || packet.sender != broker.instanceId) && packet.messages && packet.messages.length) {
       if (processedMessagesLookup[packet.id] == null) {
-        broker.publish(channelName, packet.data);
+        packet.messages.forEach(function (data) {
+          broker.publish(channelName, data);
+        });
       } else {
         clearTimeout(processedMessagesLookup[packet.id]);
       }
@@ -161,12 +163,32 @@ module.exports.attach = function (broker, options) {
   broker.on('unsubscribe', function (channelName) {
     clusterClient.unsubscribe(channelName);
   });
+
+  var publishOutboundBuffer = {};
+  var publishTimeout = null;
+
+  var flushPublishOutboundBuffer = function () {
+    Object.keys(publishOutboundBuffer).forEach(function (channelName) {
+      var packet = {
+        sender: broker.instanceId || null,
+        messages: publishOutboundBuffer[channelName],
+        id: uuid.v4()
+      };
+      clusterClient.publish(channelName, packet);
+    });
+
+    publishOutboundBuffer = {};
+    publishTimeout = null;
+  };
+
   broker.on('publish', function (channelName, data) {
-    var packet = {
-      sender: broker.instanceId || null,
-      data: data,
-      id: uuid.v4()
-    };
-    clusterClient.publish(channelName, packet);
+    if (!publishOutboundBuffer[channelName]) {
+      publishOutboundBuffer[channelName] = [];
+    }
+    publishOutboundBuffer[channelName].push(data);
+
+    if (!publishTimeout) {
+      publishTimeout = setTimeout(flushPublishOutboundBuffer, broker.options.pubSubBatchDuration);
+    }
   });
 };
