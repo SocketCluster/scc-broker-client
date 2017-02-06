@@ -1,6 +1,6 @@
 var scClient = require('socketcluster-client');
 var ClusterBrokerClient = require('./cluster-broker-client').ClusterBrokerClient;
-var uuid = require('node-uuid');
+var uuid = require('uuid');
 
 var DEFAULT_PORT = 7777;
 var DEFAULT_MESSAGE_CACHE_DURATION = 10000;
