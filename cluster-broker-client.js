@@ -29,10 +29,13 @@ ClusterBrokerClient.prototype.errors = {
 
 ClusterBrokerClient.prototype.breakDownURI = function (uri) {
   var parsedURI = url.parse(uri);
+  var brokerHost = this.broker.options.clusterBrokerServerHost;
+  if (brokerHost == 'localhost') { brokerHost = '172.0.0.1'; }
+  var brokerPort = this.broker.options.clusterBrokerServerPort;
   var hostname = parsedURI.host.replace(trailingPortNumberRegex, '');
   var result = {
-    hostname: hostname,
-    port: parsedURI.port
+    hostname: ip ? `[::ffff:${brokerHost}]` : hostname,
+    port: brokerPort || parsedURI.port
   };
   if (parsedURI.protocol == 'wss:' || parsedURI.protocol == 'https:') {
     result.secure = true;
