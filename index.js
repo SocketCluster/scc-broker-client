@@ -59,6 +59,14 @@ module.exports.attach = function (broker, options) {
     instanceId: broker.instanceId
   };
 
+  if (broker.options.clusterInstanceIp != null) {
+    stateSocketData.instanceIp = broker.options.clusterInstanceIp;
+  }
+  if (broker.options.clusterInstanceIpFamily != null) {
+    stateSocketData.instanceIpFamily = broker.options.clusterInstanceIpFamily;
+  }
+  console.log(222, stateSocketData);
+
   var getMapper = function (serverInstances) {
     return function (channelName) {
       var ch;
