@@ -48,7 +48,8 @@ module.exports.attach = function (broker, options) {
     },
     query: {
       authKey: authKey
-    }
+    },
+    secure: options.secure
   };
   var stateSocket = scClient.connect(scStateSocketOptions);
   stateSocket.on('error', function (err) {
