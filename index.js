@@ -207,4 +207,5 @@ module.exports.attach = function (broker, options) {
       }
     }
   });
+  return clusterClient;
 };
