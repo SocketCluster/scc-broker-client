@@ -67,6 +67,8 @@ module.exports.attach = function (broker, options) {
   }
 
   var getMapper = function (serverInstances) {
+    // Clone so that it represents a snapshot at a particular time.
+    serverInstancesClone = JSON.parse(JSON.stringify(serverInstances));
     return function (channelName) {
       var ch;
       var hash = channelName;
@@ -76,8 +78,8 @@ module.exports.attach = function (broker, options) {
         hash = ((hash << 5) - hash) + ch;
         hash = hash & hash;
       }
-      var targetIndex = Math.abs(hash) % serverInstances.length;
-      return serverInstances[targetIndex];
+      var targetIndex = Math.abs(hash) % serverInstancesClone.length;
+      return serverInstancesClone[targetIndex];
     };
   };
 

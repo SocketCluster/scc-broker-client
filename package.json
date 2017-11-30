@@ -15,7 +15,8 @@
     "uuid": "3.1.0"
   },
   "devDependencies": {
-    "mocha": "3.0.2"
+    "mocha": "3.0.2",
+    "mock-require": "2.0.2"
   },
   "keywords": [
     "SocketCluster",

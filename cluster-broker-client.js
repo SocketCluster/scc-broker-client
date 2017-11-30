@@ -192,8 +192,8 @@ ClusterBrokerClient.prototype._handleChannelMessage = function (channelName, pac
 
 ClusterBrokerClient.prototype._subscribeWithMapperContext = function (mapperContext, channelName) {
   var targetURI = mapperContext.mapper(channelName);
-  if (targetURI) {
-    var targetClient = mapperContext.targets[targetURI];
+  var targetClient = mapperContext.targets[targetURI];
+  if (targetClient) {
     targetClient.subscribe(channelName);
     if (!targetClient.watchers(channelName).length) {
       targetClient.watch(channelName, this._handleChannelMessage.bind(this, channelName));
@@ -212,8 +212,8 @@ ClusterBrokerClient.prototype.subscribe = function (channelName) {
 
 ClusterBrokerClient.prototype._publishWithMapperContext = function (mapperContext, channelName, data) {
   var targetURI = mapperContext.mapper(channelName);
-  if (targetURI) {
-    var targetClient = mapperContext.targets[targetURI];
+  var targetClient = mapperContext.targets[targetURI];
+  if (targetClient) {
     targetClient.publish(channelName, data);
   } else {
     var err = this.errors['NoMatchingTargetError'](channelName);
