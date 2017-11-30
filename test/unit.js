@@ -37,6 +37,9 @@ var connectSCCStateSocket = function (options) {
 
 var connectSCCBrokerSocket = function (options) {
   sccBrokerSocket = new EventEmitter();
+  sccBrokerSocket.subscriptions = function () {
+    return [];
+  };
   return sccBrokerSocket;
 };
 
@@ -61,30 +64,89 @@ describe('Unit tests', () => {
     done();
   });
 
-  beforeEach('BEFORE EACH', (done) => {
+  beforeEach('Prepare scClusterBrokerClient', (done) => {
     clusterClient = scClusterBrokerClient.attach(broker, brokerClientOptions);
     done();
   });
 
-  describe('Without failure', () => {
+  describe('Simple cases', () => {
     it('should initiate correctly without any scc-brokers', (done) => {
       sccStateSocket.on('clientJoinCluster', (stateSocketData, callback) => {
-        callback(null, {
-          serverInstances: ['wss://scc-broker-1:8888', 'wss://scc-broker-2:8888'],
-          time: Date.now()
-        });
+        setTimeout(() => {
+          callback(null, {
+            serverInstances: [],
+            time: Date.now()
+          });
+        }, 0);
       });
       sccStateSocket.on('clientSetState', (data, callback) => {
         callback();
         setTimeout(() => {
-          sccStateSocket.emit('clientStatesConverge', {state: data.instanceState});
+          sccStateSocket.emit('clientStatesConverge', {state: data.instanceState}, function () {});
         }, 0);
       });
+
+      sccStateSocket.emit('connect');
+
       setTimeout(() => {
-        assert.equal(clusterClient.pubMappers.length, 0);
-        assert.equal(clusterClient.subMappers.length, 0);
+        // The mappers should contain a single item whose targets should be an empty object.
+        assert.equal(JSON.stringify(clusterClient.pubMappers), JSON.stringify([{targets: {}}]));
+        assert.equal(JSON.stringify(clusterClient.subMappers), JSON.stringify([{targets: {}}]));
+        assert.equal(typeof clusterClient.pubMappers[0].mapper, 'function');
         done();
       }, 100);
+    });
+
+    it('should initiate correctly with a couple of scc-brokers', (done) => {
+      var serverInstancesLookup = {};
+      var serverInstanceList = [];
+
+      sccStateSocket.on('clientJoinCluster', (stateSocketData, callback) => {
+        setTimeout(() => {
+          callback(null, {
+            serverInstances: serverInstanceList,
+            time: Date.now()
+          });
+        }, 0);
+      });
+      sccStateSocket.on('clientSetState', (data, callback) => {
+        callback();
+        setTimeout(() => {
+          sccStateSocket.emit('clientStatesConverge', {state: data.instanceState}, function () {});
+        }, 0);
+      });
+
+      sccStateSocket.emit('connect');
+
+      setTimeout(() => {
+        assert.equal(JSON.stringify(clusterClient.pubMappers), JSON.stringify([{targets: {}}]));
+        assert.equal(JSON.stringify(clusterClient.subMappers), JSON.stringify([{targets: {}}]));
+
+        serverInstanceList = ['wss://scc-broker-1:8888'];
+        var sccBrokerStateSocketData = {
+          serverInstances: serverInstanceList,
+          time: Date.now()
+        };
+        sccStateSocket.emit('serverJoinCluster', sccBrokerStateSocketData, function () {});
+      }, 100);
+
+      setTimeout(() => {
+        serverInstanceList = ['wss://scc-broker-1:8888', 'wss://scc-broker-2:8888'];
+        var sccBrokerStateSocketData = {
+          serverInstances: serverInstanceList,
+          time: Date.now()
+        };
+        sccStateSocket.emit('serverJoinCluster', sccBrokerStateSocketData, function () {});
+      }, 150);
+
+      setTimeout(() => {
+        assert.equal(clusterClient.pubMappers.length, 1);
+        assert.equal(JSON.stringify(Object.keys(clusterClient.pubMappers[0].targets)), JSON.stringify(['wss://scc-broker-1:8888', 'wss://scc-broker-2:8888']));
+
+        assert.equal(clusterClient.subMappers.length, 1);
+        assert.equal(JSON.stringify(Object.keys(clusterClient.subMappers[0].targets)), JSON.stringify(['wss://scc-broker-1:8888', 'wss://scc-broker-2:8888']));
+        done();
+      }, 200);
     });
   });
 });
