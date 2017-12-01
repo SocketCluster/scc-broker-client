@@ -57,7 +57,8 @@ ClusterBrokerClient.prototype._mapperPush = function (mapperList, mapper, target
 
   var mapperContext = {
     mapper: mapper,
-    targets: targets
+    targets: targets,
+    subscriptions: {}
   };
   mapperList.push(mapperContext);
 
@@ -157,20 +158,29 @@ ClusterBrokerClient.prototype.pubMapperShift = function () {
 
 ClusterBrokerClient.prototype._unsubscribeWithMapperContext = function (mapperContext, channelName) {
   var targetURI = mapperContext.mapper(channelName);
-  if (targetURI) {
+  var targetClient = mapperContext.targets[targetURI];
+  delete mapperContext.subscriptions[channelName];
+
+  if (targetClient) {
     var isLastRemainingMappingForClientForCurrentChannel = true;
 
     // If any other subscription mappers map to this client for this channel,
     // then don't unsubscribe.
-    this.subMappers.forEach((subMapperContext) => {
-      var subTargetURI = subMapperContext.mapper(channelName);
-      if (targetURI == subTargetURI) {
-        isLastRemainingMappingForClientForCurrentChannel = false;
-        return;
+    var len = this.subMappers.length;
+
+    for (var i = 0; i < len; i++) {
+      var subMapperContext = this.subMappers[i];
+      if (subMapperContext === mapperContext) {
+        continue;
       }
-    });
+      var subTargetURI = subMapperContext.mapper(channelName);
+      if (targetURI === subTargetURI && subMapperContext.subscriptions[channelName]) {
+        isLastRemainingMappingForClientForCurrentChannel = false;
+        break;
+      }
+    }
+
     if (isLastRemainingMappingForClientForCurrentChannel) {
-      var targetClient = mapperContext.targets[targetURI];
       targetClient.unsubscribe(channelName);
       targetClient.unwatch(channelName);
     }
@@ -194,7 +204,7 @@ ClusterBrokerClient.prototype._subscribeWithMapperContext = function (mapperCont
   var targetURI = mapperContext.mapper(channelName);
   var targetClient = mapperContext.targets[targetURI];
   if (targetClient) {
-    targetClient.subscribe(channelName);
+    mapperContext.subscriptions[channelName] = targetClient.subscribe(channelName);
     if (!targetClient.watchers(channelName).length) {
       targetClient.watch(channelName, this._handleChannelMessage.bind(this, channelName));
     }
