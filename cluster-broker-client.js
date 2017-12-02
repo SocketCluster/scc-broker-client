@@ -205,7 +205,7 @@ ClusterBrokerClient.prototype._subscribeWithMapperContext = function (mapperCont
   var targetURI = mapperContext.mapper(channelName);
   var targetClient = mapperContext.targets[targetURI];
   if (targetClient) {
-    mapperContext.subscriptions[channelName] = targetClient.subscribe(channelName);
+    mapperContext.subscriptions[channelName] = targetClient.subscribe(channelName, {batch: true});
     if (!targetClient.watchers(channelName).length) {
       targetClient.watch(channelName, this._handleChannelMessage.bind(this, channelName));
     }
