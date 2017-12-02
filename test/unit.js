@@ -193,9 +193,12 @@ describe('Unit tests.', () => {
           });
         }, 0);
       });
+      var stateConvergenceTimeout;
       sccStateSocket.on('clientSetState', (data, callback) => {
+        data = JSON.parse(JSON.stringify(data));
         callback();
-        setTimeout(() => {
+        clearTimeout(stateConvergenceTimeout);
+        stateConvergenceTimeout = setTimeout(() => {
           sccStateSocket.emit('clientStatesConverge', {state: data.instanceState}, function () {});
         }, 0);
       });
@@ -223,9 +226,13 @@ describe('Unit tests.', () => {
           });
         }, 0);
       });
+
+      var stateConvergenceTimeout;
       sccStateSocket.on('clientSetState', (data, callback) => {
+        data = JSON.parse(JSON.stringify(data));
         callback();
-        setTimeout(() => {
+        clearTimeout(stateConvergenceTimeout);
+        stateConvergenceTimeout = setTimeout(() => {
           sccStateSocket.emit('clientStatesConverge', {state: data.instanceState}, function () {});
         }, 0);
       });
@@ -237,6 +244,7 @@ describe('Unit tests.', () => {
 
       var serverJoinClusterTimeout;
 
+      // Simulate scc-state sending back a 'serverJoinCluster' event after a timeout.
       setTimeout(() => {
         serverInstanceList = ['wss://scc-broker-1:8888'];
         var sccBrokerStateSocketData = {
@@ -249,6 +257,7 @@ describe('Unit tests.', () => {
         }, CLUSTER_SCALE_DELAY);
       }, 100);
 
+      // Simulate scc-state sending back a 'serverJoinCluster' event after a timeout.
       setTimeout(() => {
         serverInstanceList = ['wss://scc-broker-1:8888', 'wss://scc-broker-2:8888'];
         var sccBrokerStateSocketData = {
@@ -266,8 +275,12 @@ describe('Unit tests.', () => {
       }, 120);
 
       setTimeout(() => {
-        broker.emit('subscribe', 'a1');
-        broker.emit('subscribe', 'a2');
+        // Simulate the subscription being made on the broker.
+        broker.subscriptions['1'] = {};
+        for (var i = 0; i < 100; i++) {
+          broker.subscriptions['1']['a' + i] = {};
+          broker.emit('subscribe', 'a' + i);
+        }
       }, 250);
 
       setTimeout(() => {
@@ -298,12 +311,12 @@ describe('Unit tests.', () => {
         // That is, the difference is less than 10% of the sum of all messages.
         assert.equal(countDiff / countSum < 0.1, true);
 
-        assert.equal(receivedMessages.length, 2);
-        assert.equal(receivedMessages[0].channelName, 'a1');
-        assert.equal(receivedMessages[0].data, 'Message from a1 channel');
+        assert.equal(receivedMessages.length, 100);
+        assert.equal(receivedMessages[0].channelName, 'a0');
+        assert.equal(receivedMessages[0].data, 'Message from a0 channel');
 
-        assert.equal(receivedMessages[1].channelName, 'a2');
-        assert.equal(receivedMessages[1].data, 'Message from a2 channel');
+        assert.equal(receivedMessages[1].channelName, 'a1');
+        assert.equal(receivedMessages[1].data, 'Message from a1 channel');
 
         assert.equal(clusterClient.pubMappers.length, 1);
         assert.equal(JSON.stringify(Object.keys(clusterClient.pubMappers[0].targets)), JSON.stringify(['wss://scc-broker-1:8888', 'wss://scc-broker-2:8888']));
@@ -314,7 +327,7 @@ describe('Unit tests.', () => {
       }, 370);
     });
 
-    it('Should work correctly while adding new brokers', (done) => {
+    it('Should work correctly during transition period while adding a new broker', (done) => {
       var serverInstancesLookup = {};
       var serverInstanceList = [];
 
@@ -326,11 +339,37 @@ describe('Unit tests.', () => {
           });
         }, 0);
       });
+
+      var stateConvergenceTimeout;
       sccStateSocket.on('clientSetState', (data, callback) => {
+        data = JSON.parse(JSON.stringify(data));
+
+        if (data.instanceState.indexOf('updatedSubs') == 0) {
+          assert.equal(clusterClient.pubMappers.length, 1);
+          assert.equal(clusterClient.subMappers.length, 2);
+        }
+
         callback();
-        setTimeout(() => {
+        clearTimeout(stateConvergenceTimeout);
+
+        // Add a delay before the state converges.
+        stateConvergenceTimeout = setTimeout(() => {
           sccStateSocket.emit('clientStatesConverge', {state: data.instanceState}, function () {});
-        }, 0);
+
+          setTimeout(() => {
+            if (data.instanceState.indexOf('updatedSubs') == 0) {
+              assert.equal(clusterClient.pubMappers.length, 1);
+              assert.equal(clusterClient.subMappers.length, 2);
+            } else if (data.instanceState.indexOf('updatedPubs') == 0) {
+              assert.equal(clusterClient.pubMappers.length, 1);
+              assert.equal(clusterClient.subMappers.length, 1);
+            } else if (data.instanceState.indexOf('active') == 0) {
+              assert.equal(clusterClient.pubMappers.length, 1);
+              assert.equal(clusterClient.subMappers.length, 1);
+            }
+          }, 0);
+        }, 100);
+
       });
 
       var errors = [];
@@ -338,8 +377,22 @@ describe('Unit tests.', () => {
         errors.push(err);
       });
 
+      setTimeout(() => {
+        sccStateSocket.emit('connect');
+      }, 0);
+
+      setTimeout(() => {
+        assert.equal(JSON.stringify(clusterClient.subMappers[0].targets), JSON.stringify({}));
+        // Simulate the subscription being made on the broker.
+        broker.subscriptions['1'] = {'a0': {}};
+        // Because none of the scc-broker instances are online yet, the subscription
+        // will not be established immediately, but it should be established eventually (retry mechanism).
+        broker.emit('subscribe', 'a0');
+      }, 10);
+
       var serverJoinClusterTimeout;
 
+      // Simulate scc-state sending back a 'serverJoinCluster' event after a timeout.
       setTimeout(() => {
         serverInstanceList = ['wss://scc-broker-1:8888'];
         var sccBrokerStateSocketData = {
@@ -350,8 +403,15 @@ describe('Unit tests.', () => {
         serverJoinClusterTimeout = setTimeout(() => {
           sccStateSocket.emit('serverJoinCluster', sccBrokerStateSocketData, function () {});
         }, CLUSTER_SCALE_DELAY);
-      }, 100);
+      }, 10);
 
+      setTimeout(() => {
+        // Because none of the scc-broker instances are online yet, this message will
+        // not propagate across the cluster.
+        broker.emit('publish', 'a0', 'Hi');
+      }, 90);
+
+      // Simulate scc-state sending back a 'serverJoinCluster' event after a timeout.
       setTimeout(() => {
         serverInstanceList = ['wss://scc-broker-1:8888', 'wss://scc-broker-2:8888'];
         var sccBrokerStateSocketData = {
@@ -362,51 +422,38 @@ describe('Unit tests.', () => {
         serverJoinClusterTimeout = setTimeout(() => {
           sccStateSocket.emit('serverJoinCluster', sccBrokerStateSocketData, function () {});
         }, CLUSTER_SCALE_DELAY);
-      }, 110);
+      }, 400);
 
       setTimeout(() => {
-        sccStateSocket.emit('connect');
-      }, 220);
-
-      setTimeout(() => {
-        broker.emit('subscribe', 'a1');
-        broker.emit('subscribe', 'a2');
-      }, 250);
+        assert.equal(clusterClient.pubMappers.length, 1);
+        assert.equal(clusterClient.subMappers.length, 2);
+        // This message will be published during the transition phase while sc instances
+        // are still synching to account for the new scc-broker which just joined.
+        // It should propagate across the cluster.
+        broker.emit('publish', 'a0', 'Hello world 0');
+      }, 570);
 
       setTimeout(() => {
         assert.equal(clusterClient.pubMappers.length, 1);
         assert.equal(clusterClient.subMappers.length, 1);
-        for (var i = 0; i < 100; i++) {
-          broker.emit('publish', 'a' + i, `Message from a${i} channel`);
-        }
-      }, 330);
+        // This message will be published after the transition phase has completed
+        // and all sc instances are in sync.
+        broker.emit('publish', 'a0', 'Message from a0 channel');
+      }, 1000);
 
       setTimeout(() => {
-        assert.equal(errors.length, 0);
-
-        var sccBrokerCount1 = 0;
-        var sccBrokerCount2 = 0;
-        sccBrokerPublishHistory.forEach((messageData) => {
-          if (messageData.brokerURI === 'wss://scc-broker-1:8888') {
-            sccBrokerCount1++;
-          } else if (messageData.brokerURI === 'wss://scc-broker-2:8888') {
-            sccBrokerCount2++;
-          }
-        });
-
-        var countSum = sccBrokerCount1 + sccBrokerCount2;
-        var countDiff = Math.abs(sccBrokerCount1 - sccBrokerCount2);
-
-        // Check if the distribution between scc-brokers is roughly even.
-        // That is, the difference is less than 10% of the sum of all messages.
-        assert.equal(countDiff / countSum < 0.1, true);
+        // Because we tried to subscribe to a channel before any scc-broker instances
+        // were available, we expect some errors.
+        // Those errors should not prevent the subscription from being made at a later time
+        // once the scc-broker instances have been connected and synched.
+        assert.equal(errors.length > 0, true);
 
         assert.equal(receivedMessages.length, 2);
-        assert.equal(receivedMessages[0].channelName, 'a1');
-        assert.equal(receivedMessages[0].data, 'Message from a1 channel');
+        assert.equal(receivedMessages[0].channelName, 'a0');
+        assert.equal(receivedMessages[0].data, 'Hello world 0');
 
-        assert.equal(receivedMessages[1].channelName, 'a2');
-        assert.equal(receivedMessages[1].data, 'Message from a2 channel');
+        assert.equal(receivedMessages[1].channelName, 'a0');
+        assert.equal(receivedMessages[1].data, 'Message from a0 channel');
 
         assert.equal(clusterClient.pubMappers.length, 1);
         assert.equal(JSON.stringify(Object.keys(clusterClient.pubMappers[0].targets)), JSON.stringify(['wss://scc-broker-1:8888', 'wss://scc-broker-2:8888']));
@@ -414,7 +461,7 @@ describe('Unit tests.', () => {
         assert.equal(clusterClient.subMappers.length, 1);
         assert.equal(JSON.stringify(Object.keys(clusterClient.subMappers[0].targets)), JSON.stringify(['wss://scc-broker-1:8888', 'wss://scc-broker-2:8888']));
         done();
-      }, 370);
+      }, 1100);
     });
   });
 
