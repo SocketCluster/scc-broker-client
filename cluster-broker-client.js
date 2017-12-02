@@ -57,8 +57,7 @@ ClusterBrokerClient.prototype._mapperPush = function (mapperList, mapper, target
 
   var mapperContext = {
     mapper: mapper,
-    targets: targets,
-    subscriptions: {}
+    targets: targets
   };
   mapperList.push(mapperContext);
 
@@ -131,6 +130,8 @@ ClusterBrokerClient.prototype._cleanupUnusedTargetSockets = function () {
 
 ClusterBrokerClient.prototype.subMapperPush = function (mapper, targetURIs) {
   var mapperContext = this._mapperPush(this.subMappers, mapper, targetURIs);
+  mapperContext.subscriptions = {};
+
   var activeChannels = this.getAllSubscriptions();
 
   activeChannels.forEach((channelName) => {
