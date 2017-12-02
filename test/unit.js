@@ -55,7 +55,6 @@ var connectSCCBrokerSocket = function (options) {
 
 var activeClientMap = {};
 var sccBrokerPublishHistory = [];
-var watcherMap = {};
 
 mock('socketcluster-client', {
   connect: function (options) {
@@ -87,10 +86,12 @@ mock('socketcluster-client', {
     });
 
     socket.id = uuid.v4();
+    socket.uri = uri;
 
     activeClientMap[uri] = socket;
 
     socket.subscriberLookup = {};
+    socket.watcherLookup = {};
 
     socket.disconnect = function () {
       socket.subscriberLookup = {};
@@ -110,22 +111,19 @@ mock('socketcluster-client', {
     };
 
     socket.watchers = function (channelName) {
-      return watcherMap[channelName] || [];
+      return socket.watcherLookup[channelName] || [];
     };
 
     socket.watch = function (channelName, handler) {
-      if (!watcherMap[channelName]) {
-        watcherMap[channelName] = [];
+      if (!socket.watcherLookup[channelName]) {
+        socket.watcherLookup[channelName] = [];
       }
-      watcherMap[channelName].push({
-        socket: socket,
-        handler: handler
-      });
+      socket.watcherLookup[channelName].push(handler);
     };
 
     socket.unwatch = function (channelName, handler) {
-      if (watcherMap[channelName]) {
-        watcherMap[channelName] = watcherMap[channelName].filter(function (watcherData) {
+      if (socket.watcherLookup[channelName]) {
+        socket.watcherLookup[channelName] = socket.watcherLookup[channelName].filter((watcherData) => {
           return watcherData.handler !== handler;
         });
       }
@@ -138,10 +136,13 @@ mock('socketcluster-client', {
           channelName: channelName,
           data: data
         });
-        var watchers = watcherMap[channelName] || [];
-        watchers.forEach((watcher) => {
-          if (watcher.socket.subscriberLookup[channelName]) {
-            watcher.handler(data);
+        Object.keys(activeClientMap).forEach((clientURI) => {
+          var client = activeClientMap[clientURI];
+          if (client.subscriberLookup[channelName]) {
+            var watcherList = client.watcherLookup[channelName] || [];
+            watcherList.forEach((watcher) => {
+              watcher(data);
+            });
           }
         });
 
@@ -157,7 +158,6 @@ var scClusterBrokerClient = require('../index');
 describe('Unit tests.', () => {
   beforeEach('Prepare scClusterBrokerClient', (done) => {
     activeClientMap = {};
-    watcherMap = {};
     receivedMessages = [];
     sccBrokerPublishHistory = [];
     broker = new BrokerStub({
@@ -208,14 +208,14 @@ describe('Unit tests.', () => {
 
       setTimeout(() => {
         // The mappers should contain a single item whose targets should be an empty object.
-        assert.equal(JSON.stringify(clusterClient.pubMappers), JSON.stringify([{targets: {}, subscriptions: {}}]));
+        assert.equal(JSON.stringify(clusterClient.pubMappers), JSON.stringify([{targets: {}}]));
         assert.equal(JSON.stringify(clusterClient.subMappers), JSON.stringify([{targets: {}, subscriptions: {}}]));
         assert.equal(typeof clusterClient.pubMappers[0].mapper, 'function');
         done();
       }, 100);
     });
 
-    it('Should work correctly with a couple of scc-brokers', (done) => {
+    it('Published messages should propagate correctly with a couple of scc-brokers', (done) => {
       var serverInstancesLookup = {};
       var serverInstanceList = [];
 
@@ -328,7 +328,7 @@ describe('Unit tests.', () => {
       }, 370);
     });
 
-    it('Should work correctly during transition period while adding a new broker', (done) => {
+    it('Published messages should propagate correctly during transition period while adding a new broker', (done) => {
       var serverInstancesLookup = {};
       var serverInstanceList = [];
 
@@ -465,7 +465,7 @@ describe('Unit tests.', () => {
       }, 1100);
     });
 
-    it('Should work correctly after one of the brokers crashes', (done) => {
+    it('Published messages should propagate correctly after one of the brokers crashes', (done) => {
       var serverInstancesLookup = {};
       var serverInstanceList = [];
 
@@ -534,13 +534,30 @@ describe('Unit tests.', () => {
         }
       }, 250);
 
+
+      setTimeout(() => {
+        serverInstanceList = ['wss://scc-broker-2:8888'];
+        var sccBrokerStateSocketData = {
+          serverInstances: serverInstanceList,
+          time: Date.now()
+        };
+        // A disconnection triggers a 'serverLeaveCluster' from the scc-state instance
+        // so we simulate this here.
+        sccStateSocket.emit('serverLeaveCluster', sccBrokerStateSocketData, function () {});
+      }, 330);
+
       setTimeout(() => {
         assert.equal(clusterClient.pubMappers.length, 1);
+        assert.notEqual(clusterClient.pubMappers[0].targets['wss://scc-broker-2:8888'], null);
+
         assert.equal(clusterClient.subMappers.length, 1);
+        assert.notEqual(clusterClient.subMappers[0].targets['wss://scc-broker-2:8888'], null);
+        assert.equal(Object.keys(clusterClient.subMappers[0].subscriptions).length, 100);
+
         for (var i = 0; i < 100; i++) {
           broker.emit('publish', 'a' + i, `Message from a${i} channel`);
         }
-      }, 330);
+      }, 430);
 
       setTimeout(() => {
         assert.equal(errors.length, 0);
@@ -555,12 +572,10 @@ describe('Unit tests.', () => {
           }
         });
 
-        var countSum = sccBrokerCount1 + sccBrokerCount2;
-        var countDiff = Math.abs(sccBrokerCount1 - sccBrokerCount2);
-
-        // Check if the distribution between scc-brokers is roughly even.
-        // That is, the difference is less than 10% of the sum of all messages.
-        assert.equal(countDiff / countSum < 0.1, true);
+        // Because scc-broker-1 crashed, all messages should be passed through
+        // scc-broker-2 instead.
+        assert.equal(sccBrokerCount1, 0);
+        assert.equal(sccBrokerCount2, 100);
 
         assert.equal(receivedMessages.length, 100);
         assert.equal(receivedMessages[0].channelName, 'a0');
@@ -570,12 +585,12 @@ describe('Unit tests.', () => {
         assert.equal(receivedMessages[1].data, 'Message from a1 channel');
 
         assert.equal(clusterClient.pubMappers.length, 1);
-        assert.equal(JSON.stringify(Object.keys(clusterClient.pubMappers[0].targets)), JSON.stringify(['wss://scc-broker-1:8888', 'wss://scc-broker-2:8888']));
+        assert.equal(JSON.stringify(Object.keys(clusterClient.pubMappers[0].targets)), JSON.stringify(['wss://scc-broker-2:8888']));
 
         assert.equal(clusterClient.subMappers.length, 1);
-        assert.equal(JSON.stringify(Object.keys(clusterClient.subMappers[0].targets)), JSON.stringify(['wss://scc-broker-1:8888', 'wss://scc-broker-2:8888']));
+        assert.equal(JSON.stringify(Object.keys(clusterClient.subMappers[0].targets)), JSON.stringify(['wss://scc-broker-2:8888']));
         done();
-      }, 370);
+      }, 470);
     });
   });
 });
