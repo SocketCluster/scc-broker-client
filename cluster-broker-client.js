@@ -21,7 +21,7 @@ ClusterBrokerClient.prototype = Object.create(EventEmitter.prototype);
 
 ClusterBrokerClient.prototype.errors = {
   NoMatchingTargetError: function (channelName) {
-    var err = new Error(`Could not find a matching target server for the ${channelName} channel - The server may have gone down recently.`);
+    var err = new Error(`Could not find a matching target server for the ${channelName} channel - The server may be down.`);
     err.name = 'NoMatchingTargetError';
     return err;
   }
