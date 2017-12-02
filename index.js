@@ -16,9 +16,11 @@ module.exports.attach = function (broker, options) {
   var authKey = options.authKey || null;
 
   var clusterClient = new ClusterBrokerClient(broker, {authKey: authKey});
-  clusterClient.on('error', function (err) {
-    console.error(err);
-  });
+  if (!options.noErrorLogging) {
+    clusterClient.on('error', function (err) {
+      console.error(err);
+    });
+  }
 
   var lastestSnapshotTime = -1;
   var serverInstances = [];
@@ -52,7 +54,7 @@ module.exports.attach = function (broker, options) {
   };
   var stateSocket = scClient.connect(scStateSocketOptions);
   stateSocket.on('error', function (err) {
-    console.error(err);
+    clusterClient.emit('error', err);
   });
 
   var stateSocketData = {
