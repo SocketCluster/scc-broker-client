@@ -11,7 +11,7 @@
     "url": "https://github.com/SocketCluster/scc-broker-client.git"
   },
   "dependencies": {
-    "socketcluster-client": "~9.0.0",
+    "socketcluster-client": "~9.0.2",
     "uuid": "3.1.0"
   },
   "devDependencies": {
