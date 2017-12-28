@@ -22,16 +22,19 @@ module.exports.attach = function (broker, options) {
     });
   }
 
-  var lastestSnapshotTime = -1;
+  var latestSnapshotTime = -1;
+  var latestServerInstancesSnapshot = '[]';
   var serverInstances = [];
   var processedMessagesLookup = {};
   var messageCacheDuration = options.brokerMessageCacheDuration || DEFAULT_MESSAGE_CACHE_DURATION;
   var retryDelay = options.brokerRetryDelay || DEFAULT_RETRY_DELAY;
 
   var updateServerCluster = function (updatePacket) {
-    if (updatePacket.time > lastestSnapshotTime) {
+    var newServerInstancesSnapshot = JSON.stringify(updatePacket.serverInstances);
+    if (updatePacket.time > latestSnapshotTime && newServerInstancesSnapshot !== latestServerInstancesSnapshot) {
+      latestServerInstancesSnapshot = newServerInstancesSnapshot;
       serverInstances = updatePacket.serverInstances;
-      lastestSnapshotTime = updatePacket.time;
+      latestSnapshotTime = updatePacket.time;
       return true;
     }
     return false;
