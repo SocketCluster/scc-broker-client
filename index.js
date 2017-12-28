@@ -71,7 +71,7 @@ module.exports.attach = function (broker, options) {
     stateSocketData.instanceIpFamily = broker.options.clusterInstanceIpFamily;
   }
 
-  var getMapper = function (serverInstances) {
+  var createMapper = function (serverInstances) {
     // Clone so that it represents a snapshot at a particular time.
     serverInstancesClone = JSON.parse(JSON.stringify(serverInstances));
     return function (channelName) {
@@ -104,11 +104,24 @@ module.exports.attach = function (broker, options) {
   var addNewSubMapping = function (data, respond) {
     var updated = updateServerCluster(data);
     if (updated) {
-      var mapper = getMapper(serverInstances);
+      var mapper = createMapper(serverInstances);
       clusterClient.subMapperPush(mapper, serverInstances);
       sendClientState('updatedSubs');
     }
     respond();
+  };
+
+  var resetState = function () {
+    while (clusterClient.pubMappers.length > 0) {
+      clusterClient.pubMapperShift();
+    }
+    while (clusterClient.subMappers.length > 0) {
+      clusterClient.subMapperShift();
+    }
+    latestSnapshotTime = -1;
+    latestServerInstancesSnapshot = '[]';
+    serverInstances = [];
+    processedMessagesLookup = {};
   };
 
   var completeMappingUpdates = function () {
@@ -128,7 +141,7 @@ module.exports.attach = function (broker, options) {
 
   stateSocket.on('clientStatesConverge', function (data, respond) {
     if (data.state == 'updatedSubs:' + JSON.stringify(serverInstances)) {
-      var mapper = getMapper(serverInstances);
+      var mapper = createMapper(serverInstances);
       clusterClient.pubMapperPush(mapper, serverInstances);
       clusterClient.pubMapperShift(mapper);
       sendClientState('updatedPubs');
@@ -144,8 +157,9 @@ module.exports.attach = function (broker, options) {
         setTimeout(emitClientJoinCluster, retryDelay);
         return;
       }
+      resetState();
       updateServerCluster(data);
-      var mapper = getMapper(serverInstances);
+      var mapper = createMapper(serverInstances);
       clusterClient.subMapperPush(mapper, serverInstances);
       clusterClient.pubMapperPush(mapper, serverInstances);
       sendClientState('active');
