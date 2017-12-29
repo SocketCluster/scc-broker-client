@@ -207,9 +207,9 @@ describe('Unit tests.', () => {
       sccStateSocket.emit('connect');
 
       setTimeout(() => {
-        // The mappers should contain a single item whose targets should be an empty object.
-        assert.equal(JSON.stringify(clusterClient.pubMappers), JSON.stringify([{targets: {}}]));
-        assert.equal(JSON.stringify(clusterClient.subMappers), JSON.stringify([{targets: {}, subscriptions: {}}]));
+        // The mappers should contain a single item whose clients should be an empty object.
+        assert.equal(JSON.stringify(clusterClient.pubMappers), JSON.stringify([{clients: {}, targets: []}]));
+        assert.equal(JSON.stringify(clusterClient.subMappers), JSON.stringify([{clients: {}, targets: [], subscriptions: {}}]));
         assert.equal(typeof clusterClient.pubMappers[0].mapper, 'function');
         done();
       }, 100);
@@ -320,10 +320,10 @@ describe('Unit tests.', () => {
         assert.equal(receivedMessages[1].data, 'Message from a1 channel');
 
         assert.equal(clusterClient.pubMappers.length, 1);
-        assert.equal(JSON.stringify(Object.keys(clusterClient.pubMappers[0].targets)), JSON.stringify(['wss://scc-broker-1:8888', 'wss://scc-broker-2:8888']));
+        assert.equal(JSON.stringify(Object.keys(clusterClient.pubMappers[0].clients)), JSON.stringify(['wss://scc-broker-1:8888', 'wss://scc-broker-2:8888']));
 
         assert.equal(clusterClient.subMappers.length, 1);
-        assert.equal(JSON.stringify(Object.keys(clusterClient.subMappers[0].targets)), JSON.stringify(['wss://scc-broker-1:8888', 'wss://scc-broker-2:8888']));
+        assert.equal(JSON.stringify(Object.keys(clusterClient.subMappers[0].clients)), JSON.stringify(['wss://scc-broker-1:8888', 'wss://scc-broker-2:8888']));
         done();
       }, 370);
     });
@@ -383,7 +383,7 @@ describe('Unit tests.', () => {
       }, 0);
 
       setTimeout(() => {
-        assert.equal(JSON.stringify(clusterClient.subMappers[0].targets), JSON.stringify({}));
+        assert.equal(JSON.stringify(clusterClient.subMappers[0].clients), JSON.stringify({}));
         // Simulate the subscription being made on the broker.
         broker.subscriptions['1'] = {'a0': {}};
         // Because none of the scc-broker instances are online yet, the subscription
@@ -457,10 +457,10 @@ describe('Unit tests.', () => {
         assert.equal(receivedMessages[1].data, 'Message from a0 channel');
 
         assert.equal(clusterClient.pubMappers.length, 1);
-        assert.equal(JSON.stringify(Object.keys(clusterClient.pubMappers[0].targets)), JSON.stringify(['wss://scc-broker-1:8888', 'wss://scc-broker-2:8888']));
+        assert.equal(JSON.stringify(Object.keys(clusterClient.pubMappers[0].clients)), JSON.stringify(['wss://scc-broker-1:8888', 'wss://scc-broker-2:8888']));
 
         assert.equal(clusterClient.subMappers.length, 1);
-        assert.equal(JSON.stringify(Object.keys(clusterClient.subMappers[0].targets)), JSON.stringify(['wss://scc-broker-1:8888', 'wss://scc-broker-2:8888']));
+        assert.equal(JSON.stringify(Object.keys(clusterClient.subMappers[0].clients)), JSON.stringify(['wss://scc-broker-1:8888', 'wss://scc-broker-2:8888']));
         done();
       }, 1100);
     });
@@ -548,10 +548,10 @@ describe('Unit tests.', () => {
 
       setTimeout(() => {
         assert.equal(clusterClient.pubMappers.length, 1);
-        assert.notEqual(clusterClient.pubMappers[0].targets['wss://scc-broker-2:8888'], null);
+        assert.notEqual(clusterClient.pubMappers[0].clients['wss://scc-broker-2:8888'], null);
 
         assert.equal(clusterClient.subMappers.length, 1);
-        assert.notEqual(clusterClient.subMappers[0].targets['wss://scc-broker-2:8888'], null);
+        assert.notEqual(clusterClient.subMappers[0].clients['wss://scc-broker-2:8888'], null);
         assert.equal(Object.keys(clusterClient.subMappers[0].subscriptions).length, 100);
 
         for (var i = 0; i < 100; i++) {
@@ -585,10 +585,10 @@ describe('Unit tests.', () => {
         assert.equal(receivedMessages[1].data, 'Message from a1 channel');
 
         assert.equal(clusterClient.pubMappers.length, 1);
-        assert.equal(JSON.stringify(Object.keys(clusterClient.pubMappers[0].targets)), JSON.stringify(['wss://scc-broker-2:8888']));
+        assert.equal(JSON.stringify(Object.keys(clusterClient.pubMappers[0].clients)), JSON.stringify(['wss://scc-broker-2:8888']));
 
         assert.equal(clusterClient.subMappers.length, 1);
-        assert.equal(JSON.stringify(Object.keys(clusterClient.subMappers[0].targets)), JSON.stringify(['wss://scc-broker-2:8888']));
+        assert.equal(JSON.stringify(Object.keys(clusterClient.subMappers[0].clients)), JSON.stringify(['wss://scc-broker-2:8888']));
         done();
       }, 470);
     });
@@ -708,10 +708,10 @@ describe('Unit tests.', () => {
         assert.equal(receivedMessages[1].data, 'Message from a1 channel');
 
         assert.equal(clusterClient.pubMappers.length, 1);
-        assert.equal(JSON.stringify(Object.keys(clusterClient.pubMappers[0].targets)), JSON.stringify(['wss://scc-broker-1:8888', 'wss://scc-broker-2:8888']));
+        assert.equal(JSON.stringify(Object.keys(clusterClient.pubMappers[0].clients)), JSON.stringify(['wss://scc-broker-1:8888', 'wss://scc-broker-2:8888']));
 
         assert.equal(clusterClient.subMappers.length, 1);
-        assert.equal(JSON.stringify(Object.keys(clusterClient.subMappers[0].targets)), JSON.stringify(['wss://scc-broker-1:8888', 'wss://scc-broker-2:8888']));
+        assert.equal(JSON.stringify(Object.keys(clusterClient.subMappers[0].clients)), JSON.stringify(['wss://scc-broker-1:8888', 'wss://scc-broker-2:8888']));
         done();
       }, 370);
     });

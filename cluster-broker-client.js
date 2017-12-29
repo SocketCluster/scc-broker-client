@@ -41,7 +41,7 @@ ClusterBrokerClient.prototype.breakDownURI = function (uri) {
 };
 
 ClusterBrokerClient.prototype._mapperPush = function (mapperList, mapper, targetURIs) {
-  var targets = {};
+  var clientMap = {};
 
   targetURIs.forEach((clientURI) => {
     var clientConnectOptions = this.breakDownURI(clientURI);
@@ -49,16 +49,19 @@ ClusterBrokerClient.prototype._mapperPush = function (mapperList, mapper, target
       authKey: this.authKey
     };
     var client = scClient.connect(clientConnectOptions);
+    client.removeListener('error', this._handleClientError);
     client.on('error', this._handleClientError);
     client.targetURI = clientURI;
-    targets[clientURI] = client;
+    clientMap[clientURI] = client;
     this.targetClients[clientURI] = client;
   });
 
   var mapperContext = {
     mapper: mapper,
-    targets: targets
+    clients: clientMap,
+    targets: targetURIs
   };
+
   mapperList.push(mapperContext);
 
   return mapperContext;
@@ -80,9 +83,10 @@ ClusterBrokerClient.prototype.getAllSubscriptions = function () {
   var visitedClientsLookup = {};
   var channelsLookup = {};
   var subscriptions = [];
+
   this.subMappers.forEach((mapperContext) => {
-    Object.keys(mapperContext.targets).forEach((clientURI) => {
-      var client = mapperContext.targets[clientURI];
+    Object.keys(mapperContext.clients).forEach((clientURI) => {
+      var client = mapperContext.clients[clientURI];
       if (!visitedClientsLookup[clientURI]) {
         visitedClientsLookup[clientURI] = true;
         var subs = client.subscriptions(true);
@@ -108,13 +112,13 @@ ClusterBrokerClient.prototype.getAllSubscriptions = function () {
 ClusterBrokerClient.prototype._cleanupUnusedTargetSockets = function () {
   var requiredClients = {};
   this.subMappers.forEach((subMapperContext) => {
-    var subMapperTargetURIs = Object.keys(subMapperContext.targets);
+    var subMapperTargetURIs = Object.keys(subMapperContext.clients);
     subMapperTargetURIs.forEach((uri) => {
       requiredClients[uri] = true;
     });
   });
   this.pubMappers.forEach((pubMapperContext) => {
-    var pubMapperTargetURIs = Object.keys(pubMapperContext.targets);
+    var pubMapperTargetURIs = Object.keys(pubMapperContext.clients);
     pubMapperTargetURIs.forEach((uri) => {
       requiredClients[uri] = true;
     });
@@ -158,8 +162,9 @@ ClusterBrokerClient.prototype.pubMapperShift = function () {
 };
 
 ClusterBrokerClient.prototype._unsubscribeWithMapperContext = function (mapperContext, channelName) {
-  var targetURI = mapperContext.mapper(channelName);
-  var targetClient = mapperContext.targets[targetURI];
+  var targetURI = mapperContext.mapper(channelName, mapperContext.targets);
+  var targetClient = mapperContext.clients[targetURI];
+
   delete mapperContext.subscriptions[channelName];
 
   if (targetClient) {
@@ -174,7 +179,7 @@ ClusterBrokerClient.prototype._unsubscribeWithMapperContext = function (mapperCo
       if (subMapperContext === mapperContext) {
         continue;
       }
-      var subTargetURI = subMapperContext.mapper(channelName);
+      var subTargetURI = subMapperContext.mapper(channelName, subMapperContext.targets);
       if (targetURI === subTargetURI && subMapperContext.subscriptions[channelName]) {
         isLastRemainingMappingForClientForCurrentChannel = false;
         break;
@@ -202,8 +207,8 @@ ClusterBrokerClient.prototype._handleChannelMessage = function (channelName, pac
 };
 
 ClusterBrokerClient.prototype._subscribeWithMapperContext = function (mapperContext, channelName) {
-  var targetURI = mapperContext.mapper(channelName);
-  var targetClient = mapperContext.targets[targetURI];
+  var targetURI = mapperContext.mapper(channelName, mapperContext.targets);
+  var targetClient = mapperContext.clients[targetURI];
   if (targetClient) {
     mapperContext.subscriptions[channelName] = targetClient.subscribe(channelName, {batch: true});
     if (!targetClient.watchers(channelName).length) {
@@ -222,8 +227,8 @@ ClusterBrokerClient.prototype.subscribe = function (channelName) {
 };
 
 ClusterBrokerClient.prototype._publishWithMapperContext = function (mapperContext, channelName, data) {
-  var targetURI = mapperContext.mapper(channelName);
-  var targetClient = mapperContext.targets[targetURI];
+  var targetURI = mapperContext.mapper(channelName, mapperContext.targets);
+  var targetClient = mapperContext.clients[targetURI];
   if (targetClient) {
     targetClient.publish(channelName, data);
   } else {

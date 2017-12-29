@@ -71,21 +71,17 @@ module.exports.attach = function (broker, options) {
     stateSocketData.instanceIpFamily = broker.options.clusterInstanceIpFamily;
   }
 
-  var createMapper = function (serverInstances) {
-    // Clone so that it represents a snapshot at a particular time.
-    serverInstancesClone = JSON.parse(JSON.stringify(serverInstances));
-    return function (channelName) {
-      var ch;
-      var hash = channelName;
+  var serverMapper = function (channelName, serverInstanceList) {
+    var ch;
+    var hash = channelName;
 
-      for (var i = 0; i < channelName.length; i++) {
-        ch = channelName.charCodeAt(i);
-        hash = ((hash << 5) - hash) + ch;
-        hash = hash & hash;
-      }
-      var targetIndex = Math.abs(hash) % serverInstancesClone.length;
-      return serverInstancesClone[targetIndex];
-    };
+    for (var i = 0; i < channelName.length; i++) {
+      ch = channelName.charCodeAt(i);
+      hash = ((hash << 5) - hash) + ch;
+      hash = hash & hash;
+    }
+    var targetIndex = Math.abs(hash) % serverInstanceList.length;
+    return serverInstanceList[targetIndex];
   };
 
   var sendClientStateTimeout = -1;
@@ -104,8 +100,7 @@ module.exports.attach = function (broker, options) {
   var addNewSubMapping = function (data, respond) {
     var updated = updateServerCluster(data);
     if (updated) {
-      var mapper = createMapper(serverInstances);
-      clusterClient.subMapperPush(mapper, serverInstances);
+      clusterClient.subMapperPush(serverMapper, serverInstances);
       sendClientState('updatedSubs');
     }
     respond();
@@ -141,9 +136,10 @@ module.exports.attach = function (broker, options) {
 
   stateSocket.on('clientStatesConverge', function (data, respond) {
     if (data.state == 'updatedSubs:' + JSON.stringify(serverInstances)) {
-      var mapper = createMapper(serverInstances);
-      clusterClient.pubMapperPush(mapper, serverInstances);
-      clusterClient.pubMapperShift(mapper);
+      clusterClient.pubMapperPush(serverMapper, serverInstances);
+      while (clusterClient.pubMappers.length > 1) {
+        clusterClient.pubMapperShift();
+      }
       sendClientState('updatedPubs');
     } else if (data.state == 'updatedPubs:' + JSON.stringify(serverInstances)) {
       completeMappingUpdates();
@@ -159,9 +155,8 @@ module.exports.attach = function (broker, options) {
       }
       resetState();
       updateServerCluster(data);
-      var mapper = createMapper(serverInstances);
-      clusterClient.subMapperPush(mapper, serverInstances);
-      clusterClient.pubMapperPush(mapper, serverInstances);
+      clusterClient.subMapperPush(serverMapper, serverInstances);
+      clusterClient.pubMapperPush(serverMapper, serverInstances);
       sendClientState('active');
     });
   };
