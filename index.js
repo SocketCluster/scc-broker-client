@@ -84,14 +84,17 @@ module.exports.attach = function (broker, options) {
     return serverInstanceList[targetIndex];
   };
 
+  var lastSentClientStateString = null;
   var sendClientStateTimeout = -1;
 
   var sendClientState = function (stateName) {
     clearTimeout(sendClientStateTimeout);
+    var currentClientStateString = stateName + ':' + JSON.stringify(serverInstances);
+    lastSentClientStateString = currentClientStateString;
     stateSocket.emit('clientSetState', {
-      instanceState: stateName + ':' + JSON.stringify(serverInstances)
+      instanceState: currentClientStateString
     }, (err) => {
-      if (err) {
+      if (err && currentClientStateString === lastSentClientStateString) {
         sendClientStateTimeout = setTimeout(sendClientState.bind(this, stateName), retryDelay);
       }
     });
@@ -135,13 +138,13 @@ module.exports.attach = function (broker, options) {
   stateSocket.on('serverLeaveCluster', addNewSubMapping);
 
   stateSocket.on('clientStatesConverge', function (data, respond) {
-    if (data.state == 'updatedSubs:' + JSON.stringify(serverInstances)) {
+    if (data.state === 'updatedSubs:' + JSON.stringify(serverInstances)) {
       clusterClient.pubMapperPush(serverMapper, serverInstances);
       while (clusterClient.pubMappers.length > 1) {
         clusterClient.pubMapperShift();
       }
       sendClientState('updatedPubs');
-    } else if (data.state == 'updatedPubs:' + JSON.stringify(serverInstances)) {
+    } else if (data.state === 'updatedPubs:' + JSON.stringify(serverInstances)) {
       completeMappingUpdates();
     }
     respond();
@@ -167,7 +170,7 @@ module.exports.attach = function (broker, options) {
   };
 
   var clusterMessageHandler = function (channelName, packet) {
-    if ((packet.sender == null || packet.sender != broker.instanceId) && packet.messages && packet.messages.length) {
+    if ((packet.sender == null || packet.sender !== broker.instanceId) && packet.messages && packet.messages.length) {
       if (processedMessagesLookup[packet.id] == null) {
         packet.messages.forEach(function (data) {
           broker.publish(channelName, data);
