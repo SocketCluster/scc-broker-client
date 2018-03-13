@@ -25,6 +25,7 @@ module.exports.attach = function (broker, options) {
   var latestSnapshotTime = -1;
   var latestServerInstancesSnapshot = '[]';
   var serverInstances = [];
+  var clusterPhase = null;
   var processedMessagesLookup = {};
   var messageCacheDuration = options.brokerMessageCacheDuration || DEFAULT_MESSAGE_CACHE_DURATION;
   var retryDelay = options.brokerRetryDelay || DEFAULT_RETRY_DELAY;
@@ -35,6 +36,7 @@ module.exports.attach = function (broker, options) {
       latestServerInstancesSnapshot = newServerInstancesSnapshot;
       serverInstances = updatePacket.serverInstances;
       latestSnapshotTime = updatePacket.time;
+      clusterPhase = updatePacket.phase;
       return true;
     }
     return false;
@@ -160,7 +162,7 @@ module.exports.attach = function (broker, options) {
       updateServerCluster(data);
       clusterClient.subMapperPush(serverMapper, serverInstances);
       clusterClient.pubMapperPush(serverMapper, serverInstances);
-      sendClientState('active');
+      sendClientState(clusterPhase || 'active');
     });
   };
   stateSocket.on('connect', emitClientJoinCluster);
