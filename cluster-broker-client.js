@@ -24,6 +24,11 @@ ClusterBrokerClient.prototype.errors = {
     var err = new Error(`Could not find a matching target server for the ${channelName} channel - The server may be down.`);
     err.name = 'NoMatchingTargetError';
     return err;
+  },
+  BackEndSubscribeError: function (channelName) {
+    var err = new Error(`Failed to subscribe to the ${channelName} channel on the back end`);
+    err.name = 'BackEndSubscribeError';
+    return err;
   }
 };
 
@@ -132,14 +137,23 @@ ClusterBrokerClient.prototype._cleanupUnusedTargetSockets = function () {
   });
 };
 
-ClusterBrokerClient.prototype.subMapperPush = function (mapper, targetURIs) {
+ClusterBrokerClient.prototype.subMapperPush = function (mapper, targetURIs, callback) {
   var mapperContext = this._mapperPush(this.subMappers, mapper, targetURIs);
   mapperContext.subscriptions = {};
 
   var activeChannels = this.getAllSubscriptions();
+  var activeChannelCount = activeChannels.length;
+  var subscribedCount = 0;
 
+  var invokeCallbackIfAllCompleted = (err) => {
+    // Ignore errors for now.
+    // TODO: Retry failed subscriptions?
+    if (++subscribedCount === activeChannelCount) {
+      callback && callback();
+    }
+  };
   activeChannels.forEach((channelName) => {
-    this._subscribeWithMapperContext(mapperContext, channelName);
+    this._subscribeWithMapperContext(mapperContext, channelName, invokeCallbackIfAllCompleted);
   });
 };
 
@@ -206,17 +220,37 @@ ClusterBrokerClient.prototype._handleChannelMessage = function (channelName, pac
   this.emit('message', channelName, packet);
 };
 
-ClusterBrokerClient.prototype._subscribeWithMapperContext = function (mapperContext, channelName) {
+ClusterBrokerClient.prototype._subscribeWithMapperContext = function (mapperContext, channelName, callback) {
   var targetURI = mapperContext.mapper(channelName, mapperContext.targets);
   var targetClient = mapperContext.clients[targetURI];
   if (targetClient) {
-    mapperContext.subscriptions[channelName] = targetClient.subscribe(channelName, {batch: true});
+    var channel = targetClient.subscribe(channelName, {batch: true});
+    mapperContext.subscriptions[channelName] = channel;
     if (!targetClient.watchers(channelName).length) {
       targetClient.watch(channelName, this._handleChannelMessage.bind(this, channelName));
+    }
+    if (callback) {
+      if (channel.isSubscribed()) {
+        callback();
+      } else {
+        var channelSubscribeHandler = () => {
+          channel.removeListener('subscribeFail', channelSubscribeFailHandler);
+          callback();
+        };
+        var channelSubscribeFailHandler = () => {
+          channel.removeListener('subscribe', channelSubscribeHandler);
+          var err = this.errors['BackEndSubscribeError'](channelName);
+          this.emit('error', err);
+          callback(err);
+        };
+        channel.once('subscribe', channelSubscribeHandler);
+        channel.once('subscribeFail', channelSubscribeFailHandler);
+      }
     }
   } else {
     var err = this.errors['NoMatchingTargetError'](channelName);
     this.emit('error', err);
+    callback && callback(err);
   }
 };
 

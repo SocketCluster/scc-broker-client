@@ -105,10 +105,13 @@ module.exports.attach = function (broker, options) {
   var addNewSubMapping = function (data, respond) {
     var updated = updateServerCluster(data);
     if (updated) {
-      clusterClient.subMapperPush(serverMapper, serverInstances);
-      sendClientState('updatedSubs');
+      clusterClient.subMapperPush(serverMapper, serverInstances, () => {
+        sendClientState('updatedSubs');
+        respond();
+      });
+    } else {
+      respond();
     }
-    respond();
   };
 
   var resetState = function () {
@@ -160,9 +163,10 @@ module.exports.attach = function (broker, options) {
       }
       resetState();
       updateServerCluster(data);
-      clusterClient.subMapperPush(serverMapper, serverInstances);
       clusterClient.pubMapperPush(serverMapper, serverInstances);
-      sendClientState(clusterPhase || 'active');
+      clusterClient.subMapperPush(serverMapper, serverInstances, () => {
+        sendClientState(clusterPhase || 'active');
+      });
     });
   };
   stateSocket.on('connect', emitClientJoinCluster);
