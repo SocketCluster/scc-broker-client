@@ -61,7 +61,7 @@ module.exports.attach = function (broker, options) {
   var updateBrokerMapping = (data, respond) => {
     var updated = isNewSnapshot(data);
     if (updated) {
-      clusterClient.setBrokers(data.sccBrokerInstances);
+      clusterClient.setBrokers(data.sccBrokerURIs);
     }
     respond();
   };
@@ -69,14 +69,25 @@ module.exports.attach = function (broker, options) {
   stateSocket.on('sccBrokerJoinCluster', updateBrokerMapping);
   stateSocket.on('sccBrokerLeaveCluster', updateBrokerMapping);
 
+  var sccWorkerStateData = {
+    instanceId: broker.instanceId
+  };
+
+  if (broker.options.clusterInstanceIp != null) {
+    sccWorkerStateData.instanceIp = broker.options.clusterInstanceIp;
+  }
+  if (broker.options.clusterInstanceIpFamily != null) {
+    sccWorkerStateData.instanceIpFamily = broker.options.clusterInstanceIpFamily;
+  }
+
   var emitSCCWorkerJoinCluster = function () {
-    stateSocket.emit('sccWorkerJoinCluster', stateSocketData, function (err, data) {
+    stateSocket.emit('sccWorkerJoinCluster', sccWorkerStateData, function (err, data) {
       if (err) {
         setTimeout(emitSCCWorkerJoinCluster, retryDelay);
         return;
       }
       resetSnapshotTime();
-      clusterClient.setBrokers(data.sccBrokerInstances);
+      clusterClient.setBrokers(data.sccBrokerURIs);
     });
   };
   stateSocket.on('connect', emitSCCWorkerJoinCluster);
