@@ -106,9 +106,9 @@ module.exports.attach = function (broker, options) {
     var updated = updateServerCluster(data);
     if (updated) {
       clusterClient.subMapperPush(serverMapper, serverInstances, () => {
-        sendClientState('updatedSubs');
-        respond();
+        sendClientState(clusterPhase || 'updatedSubs');
       });
+      respond();
     } else {
       respond();
     }
