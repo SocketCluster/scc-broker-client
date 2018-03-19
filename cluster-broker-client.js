@@ -36,7 +36,7 @@ ClusterBrokerClient.prototype.errors = {
   }
 };
 
-ClusterBrokerClient.prototype.mapChannelNameToBrokerURI = (channelName) => {
+ClusterBrokerClient.prototype.mapChannelNameToBrokerURI = function (channelName) {
   var sccBrokerURIList = this.sccBrokerURIList;
   var ch;
   var hash = channelName;
@@ -95,7 +95,7 @@ ClusterBrokerClient.prototype.setBrokers = function (sccBrokerURIList) {
   fullSubscriptionList.forEach((channelName) => {
     var targetSCCBrokerURI = this.mapChannelNameToBrokerURI(channelName);
     if (!newSubscriptionsMap[targetSCCBrokerURI]) {
-      newSubscriptionsMap[targetSCCBrokerURI] = [];
+      newSubscriptionsMap[targetSCCBrokerURI] = {};
     }
     if (!newSubscriptionsMap[targetSCCBrokerURI][channelName]) {
       newSubscriptionsMap[targetSCCBrokerURI][channelName] = true;
@@ -115,7 +115,7 @@ ClusterBrokerClient.prototype.setBrokers = function (sccBrokerURIList) {
 
     var newChannelList = Object.keys(newChannelLookup);
     newChannelList.forEach((channelName) => {
-      targetClient.subscribe(channelName);
+      this._subscribeClientToChannelAndWatch(targetClient, channelName);
     });
   });
 };
@@ -135,7 +135,6 @@ ClusterBrokerClient.prototype._getAllUpstreamBrokerSubscriptions = function () {
 ClusterBrokerClient.prototype.getAllSubscriptions = function () {
   var visitedClientLookup = {};
   var channelLookup = {};
-  var subscriptionList = [];
 
   Object.keys(this.sccBrokerClients).forEach((clientURI) => {
     var client = this.sccBrokerClients[clientURI];
@@ -145,34 +144,35 @@ ClusterBrokerClient.prototype.getAllSubscriptions = function () {
       subs.forEach((channelName) => {
         if (!channelLookup[channelName]) {
           channelLookup[channelName] = true;
-          subscriptionList.push(channelName);
         }
       });
     }
   });
   var localBrokerSubscriptions = this._getAllUpstreamBrokerSubscriptions();
   localBrokerSubscriptions.forEach((channelName) => {
-    if (!channelLookup[channelName]) {
-      subscriptionList.push(channelName);
-    }
+    channelLookup[channelName] = true;
   });
-  return subscriptionList;
+  return Object.keys(channelLookup);
 };
 
 ClusterBrokerClient.prototype._handleChannelMessage = function (channelName, packet) {
   this.emit('message', channelName, packet);
 };
 
+ClusterBrokerClient.prototype._subscribeClientToChannelAndWatch = function (client, channelName) {
+  client.subscribe(channelName);
+  if (!client.watchers(channelName).length) {
+    client.watch(channelName, (data) => {
+      this._handleChannelMessage(channelName, data);
+    });
+  }
+};
+
 ClusterBrokerClient.prototype.subscribe = function (channelName) {
   var targetSCCBrokerURI = this.mapChannelNameToBrokerURI(channelName);
   var targetSCCBrokerClient = this.sccBrokerClients[targetSCCBrokerURI];
   if (targetSCCBrokerClient) {
-    targetSCCBrokerClient.subscribe(channelName);
-    if (!targetSCCBrokerClient.watchers(channelName).length) {
-      targetSCCBrokerClient.watch(channelName, (data) => {
-        this._handleChannelMessage(channelName, data);
-      });
-    }
+    this._subscribeClientToChannelAndWatch(targetSCCBrokerClient, channelName);
   } else {
     var err = this.errors.NoMatchingSubscribeTargetError(channelName);
     this.emit('error', err);

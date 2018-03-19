@@ -1,6 +1,5 @@
 var scClient = require('socketcluster-client');
 var ClusterBrokerClient = require('./cluster-broker-client');
-var uuid = require('uuid');
 
 var DEFAULT_PORT = 7777;
 var DEFAULT_MESSAGE_CACHE_DURATION = 10000;
@@ -21,7 +20,6 @@ module.exports.attach = function (broker, options) {
     });
   }
 
-  var messageCacheDuration = options.brokerMessageCacheDuration || DEFAULT_MESSAGE_CACHE_DURATION;
   var retryDelay = options.brokerRetryDelay || DEFAULT_RETRY_DELAY;
 
   var scStateSocketOptions = {
@@ -80,8 +78,8 @@ module.exports.attach = function (broker, options) {
     sccWorkerStateData.instanceIpFamily = broker.options.clusterInstanceIpFamily;
   }
 
-  var emitSCCWorkerJoinCluster = function () {
-    stateSocket.emit('sccWorkerJoinCluster', sccWorkerStateData, function (err, data) {
+  var emitSCCWorkerJoinCluster = () => {
+    stateSocket.emit('sccWorkerJoinCluster', sccWorkerStateData, (err, data) => {
       if (err) {
         setTimeout(emitSCCWorkerJoinCluster, retryDelay);
         return;
@@ -91,4 +89,57 @@ module.exports.attach = function (broker, options) {
     });
   };
   stateSocket.on('connect', emitSCCWorkerJoinCluster);
+
+  var clusterMessageHandler = (channelName, packet) => {
+    if ((packet.sender == null || packet.sender !== broker.instanceId) && packet.messages && packet.messages.length) {
+      packet.messages.forEach((data) => {
+        broker.publish(channelName, data);
+      });
+    }
+  };
+  clusterClient.on('message', clusterMessageHandler);
+
+  broker.on('subscribe', (channelName) => {
+    clusterClient.subscribe(channelName);
+  });
+  broker.on('unsubscribe', (channelName) => {
+    clusterClient.unsubscribe(channelName);
+  });
+
+  var publishOutboundBuffer = {};
+  var publishTimeout = null;
+
+  var flushPublishOutboundBuffer = () => {
+    Object.keys(publishOutboundBuffer).forEach((channelName) => {
+      var packet = {
+        sender: broker.instanceId || null,
+        messages: publishOutboundBuffer[channelName],
+      };
+      clusterClient.publish(channelName, packet);
+    });
+
+    publishOutboundBuffer = {};
+    publishTimeout = null;
+  };
+
+  broker.on('publish', (channelName, data) => {
+    if (broker.options.pubSubBatchDuration == null) {
+      var packet = {
+        sender: broker.instanceId || null,
+        messages: [data],
+      };
+      clusterClient.publish(channelName, packet);
+    } else {
+      if (!publishOutboundBuffer[channelName]) {
+        publishOutboundBuffer[channelName] = [];
+      }
+      publishOutboundBuffer[channelName].push(data);
+
+      if (!publishTimeout) {
+        publishTimeout = setTimeout(flushPublishOutboundBuffer, broker.options.pubSubBatchDuration);
+      }
+    }
+  });
+
+  return clusterClient;
 };
