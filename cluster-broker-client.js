@@ -68,7 +68,7 @@ ClusterBrokerClient.prototype.setBrokers = function (sccBrokerURIList) {
   var brokerClientMap = {};
   var fullSubscriptionList = this.getAllSubscriptions();
 
-  sccBrokerURIList.forEach((clientURI) => {
+  this.sccBrokerURIList.forEach((clientURI) => {
     var clientConnectOptions = this.breakDownURI(clientURI);
     clientConnectOptions.query = {
       authKey: this.authKey
@@ -104,7 +104,7 @@ ClusterBrokerClient.prototype.setBrokers = function (sccBrokerURIList) {
 
   Object.keys(this.sccBrokerClients).forEach((clientURI) => {
     var targetClient = this.sccBrokerClients[clientURI];
-    var newChannelLookup = newSubscriptionsMap[targetSCCBrokerURI] || {};
+    var newChannelLookup = newSubscriptionsMap[clientURI] || {};
 
     var existingChannelList = targetClient.subscriptions(true);
     existingChannelList.forEach((channelName) => {

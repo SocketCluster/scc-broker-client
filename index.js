@@ -21,8 +21,6 @@ module.exports.attach = function (broker, options) {
     });
   }
 
-  var sccBrokerInstances = [];
-
   var messageCacheDuration = options.brokerMessageCacheDuration || DEFAULT_MESSAGE_CACHE_DURATION;
   var retryDelay = options.brokerRetryDelay || DEFAULT_RETRY_DELAY;
 
@@ -46,14 +44,40 @@ module.exports.attach = function (broker, options) {
     clusterClient.emit('error', err);
   });
 
-  var updateBrokerMapping = (data, respond) => {
-    if (data.time > latestSnapshotTime) {
-      sccBrokerInstances = data.sccBrokerInstances;
+  var latestSnapshotTime = -1;
+
+  var isNewSnapshot = (updatePacket) => {
+    if (updatePacket.time > latestSnapshotTime) {
+      latestSnapshotTime = updatePacket.time;
       return true;
     }
     return false;
   };
 
+  var resetSnapshotTime = () => {
+    latestSnapshotTime = -1;
+  };
+
+  var updateBrokerMapping = (data, respond) => {
+    var updated = isNewSnapshot(data);
+    if (updated) {
+      clusterClient.setBrokers(data.sccBrokerInstances);
+    }
+    respond();
+  };
+
   stateSocket.on('sccBrokerJoinCluster', updateBrokerMapping);
   stateSocket.on('sccBrokerLeaveCluster', updateBrokerMapping);
+
+  var emitSCCWorkerJoinCluster = function () {
+    stateSocket.emit('sccWorkerJoinCluster', stateSocketData, function (err, data) {
+      if (err) {
+        setTimeout(emitSCCWorkerJoinCluster, retryDelay);
+        return;
+      }
+      resetSnapshotTime();
+      clusterClient.setBrokers(data.sccBrokerInstances);
+    });
+  };
+  stateSocket.on('connect', emitSCCWorkerJoinCluster);
 };
