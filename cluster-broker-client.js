@@ -2,7 +2,7 @@ var url = require('url');
 var scClient = require('socketcluster-client');
 var EventEmitter = require('events').EventEmitter;
 
-var trailingPortNumberRegex = /:[0-9]+$/
+var trailingPortNumberRegex = /:[0-9]+$/;
 
 var ClusterBrokerClient = function (broker, options) {
   EventEmitter.call(this);
@@ -171,7 +171,7 @@ ClusterBrokerClient.prototype.subscribe = function (channelName) {
     if (!targetSCCBrokerClient.watchers(channelName).length) {
       targetSCCBrokerClient.watch(channelName, (data) => {
         this._handleChannelMessage(channelName, data);
-      }));
+      });
     }
   } else {
     var err = this.errors.NoMatchingSubscribeTargetError(channelName);
