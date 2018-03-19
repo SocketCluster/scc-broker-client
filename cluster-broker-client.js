@@ -56,6 +56,15 @@ ClusterBrokerClient.prototype._mapperPush = function (mapperList, mapper, target
     var client = scClient.connect(clientConnectOptions);
     client.removeListener('error', this._handleClientError);
     client.on('error', this._handleClientError);
+    client.removeAllListeners('close');
+    client.on('close', () => {
+      client.subscriptions(true).forEach((channelName) => {
+        var channel = client.channel(channelName);
+        if (channel && channel.cancelBackEndSubscribe) {
+          channel.cancelBackEndSubscribe();
+        }
+      });
+    });
     client.targetURI = clientURI;
     clientMap[clientURI] = client;
     this.targetClients[clientURI] = client;
@@ -234,17 +243,25 @@ ClusterBrokerClient.prototype._subscribeWithMapperContext = function (mapperCont
         callback();
       } else {
         var channelSubscribeHandler = () => {
-          channel.removeListener('subscribeFail', channelSubscribeFailHandler);
+          channel.removeListener('subscribeFail', backEndSubscribeFail);
+          delete channel.cancelBackEndSubscribe;
           callback();
         };
-        var channelSubscribeFailHandler = () => {
+        var backEndSubscribeFail = () => {
           channel.removeListener('subscribe', channelSubscribeHandler);
+          delete channel.cancelBackEndSubscribe;
           var err = this.errors['BackEndSubscribeError'](channelName);
           this.emit('error', err);
           callback(err);
         };
+        channel.cancelBackEndSubscribe = () => {
+          channel.removeListener('subscribeFail', backEndSubscribeFail);
+          channel.removeListener('subscribe', channelSubscribeHandler);
+          delete channel.cancelBackEndSubscribe;
+          callback();
+        };
         channel.once('subscribe', channelSubscribeHandler);
-        channel.once('subscribeFail', channelSubscribeFailHandler);
+        channel.once('subscribeFail', backEndSubscribeFail);
       }
     }
   } else {
