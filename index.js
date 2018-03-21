@@ -71,12 +71,8 @@ module.exports.attach = function (broker, options) {
     instanceId: broker.instanceId
   };
 
-  if (broker.options.clusterInstanceIp != null) {
-    sccWorkerStateData.instanceIp = broker.options.clusterInstanceIp;
-  }
-  if (broker.options.clusterInstanceIpFamily != null) {
-    sccWorkerStateData.instanceIpFamily = broker.options.clusterInstanceIpFamily;
-  }
+  sccWorkerStateData.instanceIp = broker.options.clusterInstanceIp;
+  sccWorkerStateData.instanceIpFamily = broker.options.clusterInstanceIpFamily || 'IPv4';
 
   var emitSCCWorkerJoinCluster = () => {
     stateSocket.emit('sccWorkerJoinCluster', sccWorkerStateData, (err, data) => {
