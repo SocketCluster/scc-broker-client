@@ -8,6 +8,7 @@
     "url": "https://github.com/SocketCluster/scc-broker-client.git"
   },
   "dependencies": {
+    "skeleton-rendezvous": "^1.1.0",
     "socketcluster-client": "^10.1.2"
   },
   "devDependencies": {

@@ -1,15 +1,30 @@
 var url = require('url');
 var scClient = require('socketcluster-client');
 var EventEmitter = require('events').EventEmitter;
+var SimpleMapper = require('./mappers/simple-mapper');
+var SkeletonRendezvousMapper = require('./mappers/skeleton-rendezvous-mapper');
 
 var trailingPortNumberRegex = /:[0-9]+$/;
 
 var ClusterBrokerClient = function (broker, options) {
+  options = options || {};
   EventEmitter.call(this);
   this.broker = broker;
   this.sccBrokerClients = {};
   this.sccBrokerURIList = [];
   this.authKey = options.authKey || null;
+  this.mappingEngine = options.mappingEngine || 'skeletonRendezvous';
+
+  if (this.mappingEngine === 'skeletonRendezvous') {
+    this.mapper = new SkeletonRendezvousMapper(options.mappingEngineOptions);
+  } else if (this.mappingEngine === 'simple') {
+    this.mapper = new SimpleMapper(options.mappingEngineOptions);
+  } else {
+    if (typeof this.mappingEngine !== 'object') {
+      throw new Error(`The specified mappingEngine '${this.mappingEngine}' is not a valid engine - It must be either 'simple', 'skeletonRendezvous' or a custom mappingEngine instance`);
+    }
+    this.mapper = this.mappingEngine;
+  }
 
   this._handleClientError = (err) => {
     this.emit('error', err);
@@ -37,17 +52,7 @@ ClusterBrokerClient.prototype.errors = {
 };
 
 ClusterBrokerClient.prototype.mapChannelNameToBrokerURI = function (channelName) {
-  var sccBrokerURIList = this.sccBrokerURIList;
-  var ch;
-  var hash = channelName;
-
-  for (var i = 0; i < channelName.length; i++) {
-    ch = channelName.charCodeAt(i);
-    hash = ((hash << 5) - hash) + ch;
-    hash = hash & hash;
-  }
-  var targetIndex = Math.abs(hash) % sccBrokerURIList.length;
-  return sccBrokerURIList[targetIndex];
+  return this.mapper.findSite(channelName);
 };
 
 ClusterBrokerClient.prototype.breakDownURI = function (uri) {
@@ -65,6 +70,8 @@ ClusterBrokerClient.prototype.breakDownURI = function (uri) {
 
 ClusterBrokerClient.prototype.setBrokers = function (sccBrokerURIList) {
   this.sccBrokerURIList = sccBrokerURIList.concat();
+  this.mapper.setSites(this.sccBrokerURIList);
+
   var brokerClientMap = {};
   var fullSubscriptionList = this.getAllSubscriptions();
 
