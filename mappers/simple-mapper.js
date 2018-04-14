@@ -1,4 +1,7 @@
+var Hasher = require('../hasher');
+
 function SimpleMapper() {
+  this.hasher = new Hasher();
   this.sites = [];
 }
 
@@ -12,15 +15,7 @@ SimpleMapper.prototype.getSites = function () {
 
 SimpleMapper.prototype.findSite = function (key) {
   var sites = this.sites;
-  var ch;
-  var hash = key;
-
-  for (var i = 0; i < key.length; i++) {
-    ch = key.charCodeAt(i);
-    hash = ((hash << 5) - hash) + ch;
-    hash = hash & hash;
-  }
-  var targetIndex = Math.abs(hash || 0) % sites.length;
+  var targetIndex = this.hasher.hash(key, sites.length);
   return sites[targetIndex];
 };
 
