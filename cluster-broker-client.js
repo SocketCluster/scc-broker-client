@@ -60,6 +60,7 @@ ClusterBrokerClient.prototype.setBrokers = function (sccBrokerURIList) {
     var previousClientPool = this.sccBrokerClientPools[clientURI];
     if (previousClientPool) {
       previousClientPool.unbindClientListeners();
+      previousClientPool.removeAllListeners();
     }
     var clientPool = new ClientPool({
       clientCount: this.clientPoolSize,
