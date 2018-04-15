@@ -18,7 +18,9 @@ module.exports.attach = function (broker, options) {
     mappingEngine: options.mappingEngine,
     clientPoolSize: options.clientPoolSize,
   });
-  if (!options.noErrorLogging) {
+  if (options.noErrorLogging) {
+    clusterClient.on('error', (err) => {});
+  } else {
     clusterClient.on('error', (err) => {
       console.error(err);
     });
