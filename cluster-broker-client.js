@@ -7,11 +7,11 @@ var ClusterBrokerClient = function (broker, options) {
   options = options || {};
   EventEmitter.call(this);
   this.broker = broker;
-  this.clientPoolSize = options.clientPoolSize || 1;
   this.sccBrokerClientPools = {};
   this.sccBrokerURIList = [];
   this.authKey = options.authKey || null;
   this.mappingEngine = options.mappingEngine || 'skeletonRendezvous';
+  this.clientPoolSize = options.clientPoolSize || 1;
 
   if (this.mappingEngine === 'skeletonRendezvous') {
     this.mapper = new SkeletonRendezvousMapper(options.mappingEngineOptions);
@@ -23,10 +23,6 @@ var ClusterBrokerClient = function (broker, options) {
     }
     this.mapper = this.mappingEngine;
   }
-
-  this._handleClientError = (err) => {
-    this.emit('error', err);
-  };
 };
 
 ClusterBrokerClient.prototype = Object.create(EventEmitter.prototype);
@@ -61,12 +57,31 @@ ClusterBrokerClient.prototype.setBrokers = function (sccBrokerURIList) {
   var fullSubscriptionList = this.getAllSubscriptions();
 
   this.sccBrokerURIList.forEach((clientURI) => {
+    var previousClientPool = this.sccBrokerClientPools[clientURI];
+    if (previousClientPool) {
+      previousClientPool.unbindClientListeners();
+    }
     var clientPool = new ClientPool({
       clientCount: this.clientPoolSize,
       targetURI: clientURI,
       authKey: this.authKey
     });
-    clientPool.on('error', this._handleClientError);
+    clientPool.on('error', (err) => {
+      this.emit('error', err);
+    });
+    clientPool.on('subscribe', (data) => {
+      this.emit('subscribe', data);
+    });
+    clientPool.on('subscribeFail', (data) => {
+      this.emit('subscribeFail', data);
+    });
+    clientPool.on('publish', (data) => {
+      this.emit('publish', data);
+    });
+    clientPool.on('publishFail', (data) => {
+      this.emit('publishFail', data);
+    });
+    clientPool.bindClientListeners();
     brokerClientMap[clientURI] = clientPool;
     this.sccBrokerClientPools[clientURI] = clientPool;
   });

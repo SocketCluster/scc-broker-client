@@ -13,7 +13,11 @@ module.exports.attach = function (broker, options) {
   var reconnectRandomness = options.stateServerReconnectRandomness || DEFAULT_RECONNECT_RANDOMNESS;
   var authKey = options.authKey || null;
 
-  var clusterClient = new ClusterBrokerClient(broker, {authKey: authKey});
+  var clusterClient = new ClusterBrokerClient(broker, {
+    authKey: authKey,
+    mappingEngine: options.mappingEngine,
+    clientPoolSize: options.clientPoolSize,
+  });
   if (!options.noErrorLogging) {
     clusterClient.on('error', (err) => {
       console.error(err);

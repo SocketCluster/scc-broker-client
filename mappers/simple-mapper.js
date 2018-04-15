@@ -14,8 +14,9 @@ SimpleMapper.prototype.getSites = function () {
 };
 
 SimpleMapper.prototype.findSite = function (key) {
+  key = this.hasher.hashToHex(key);
   var sites = this.sites;
-  var targetIndex = this.hasher.hash(key, sites.length);
+  var targetIndex = this.hasher.hashToIndex(key, sites.length);
   return sites[targetIndex];
 };
 

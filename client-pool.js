@@ -6,6 +6,7 @@ var Hasher = require('./hasher');
 var trailingPortNumberRegex = /:[0-9]+$/;
 
 function ClientPool(options) {
+  var self = this;
   EventEmitter.call(this);
 
   options = options || {};
@@ -14,25 +15,66 @@ function ClientPool(options) {
   this.targetURI = options.targetURI;
   this.authKey = options.authKey;
 
+  this.areClientListenersBound = false;
+
   var clientConnectOptions = this.breakDownURI(this.targetURI);
   clientConnectOptions.query = {
     authKey: this.authKey
   };
 
-  this._handleClientError = (err) => {
-    this.emit('error', err);
+  this._handleClientError = function (err) {
+    self.emit('error', err);
+  };
+  this._handleClientSubscribe = function (channelName) {
+    var client = this;
+    self.emit('subscribe', {
+      targetURI: self.targetURI,
+      poolIndex: client.poolIndex,
+      channel: channelName
+    });
+  };
+  this._handleClientSubscribeFail = function (err, channelName) {
+    var client = this;
+    self.emit('subscribeFail', {
+      targetURI: self.targetURI,
+      poolIndex: client.poolIndex,
+      error: err,
+      channel: channelName
+    });
   };
 
   this.clients = [];
+
   for (var i = 0; i < this.clientCount; i++) {
-    var client = scClient.create(clientConnectOptions);
-    client.removeListener('error', this._handleClientError);
+    var connectOptions = Object.assign({}, clientConnectOptions);
+    connectOptions.query.poolIndex = i;
+    var client = scClient.create(connectOptions);
+    client.poolIndex = i;
     client.on('error', this._handleClientError);
     this.clients.push(client);
   }
 }
 
 ClientPool.prototype = Object.create(EventEmitter.prototype);
+
+ClientPool.prototype.bindClientListeners = function () {
+  this.unbindClientListeners();
+  this.clients.forEach((client) => {
+    client.on('error', this._handleClientError);
+    client.on('subscribe', this._handleClientSubscribe);
+    client.on('subscribeFail', this._handleClientSubscribeFail);
+  });
+  this.areClientListenersBound = true;
+};
+
+ClientPool.prototype.unbindClientListeners = function () {
+  this.clients.forEach((client) => {
+    client.removeListener('error', this._handleClientError);
+    client.removeListener('subscribe', this._handleClientSubscribe);
+    client.removeListener('subscribeFail', this._handleClientSubscribeFail);
+  });
+  this.areClientListenersBound = false;
+};
 
 ClientPool.prototype.breakDownURI = function (uri) {
   var parsedURI = url.parse(uri);
@@ -48,12 +90,34 @@ ClientPool.prototype.breakDownURI = function (uri) {
 };
 
 ClientPool.prototype.selectClient = function (key) {
-  var targetIndex = this.hasher.hash(key, this.clients.length);
+  var targetIndex = this.hasher.hashToIndex(key, this.clients.length);
   return this.clients[targetIndex];
 };
 
 ClientPool.prototype.publish = function (channelName, data) {
   var targetClient = this.selectClient(channelName);
+  if (this.areClientListenersBound) {
+    return targetClient.publish(channelName, data, (err) => {
+      if (!this.areClientListenersBound) {
+        return;
+      }
+      if (err) {
+        this.emit('publishFail', {
+          targetURI: this.targetURI,
+          poolIndex: targetClient.poolIndex,
+          channel: channelName,
+          data: data
+        });
+        return;
+      }
+      this.emit('publish', {
+        targetURI: this.targetURI,
+        poolIndex: targetClient.poolIndex,
+        channel: channelName,
+        data: data
+      });
+    });
+  }
   return targetClient.publish(channelName, data);
 };
 
