@@ -1,5 +1,7 @@
 var scClient = require('socketcluster-client');
 var ClusterBrokerClient = require('./cluster-broker-client');
+var sccSemverReport = require('scc-semver-report');
+var sccSemverReporter = sccSemverReport(sccSemverReport.SCC_BROKER_CLIENT_PACKAGE_NAME);
 
 var DEFAULT_PORT = 7777;
 var DEFAULT_MESSAGE_CACHE_DURATION = 10000;
@@ -44,6 +46,15 @@ module.exports.attach = function (broker, options) {
     }
   };
   var stateSocket = scClient.connect(scStateSocketOptions);
+
+  var sccSemverReportOptions = {
+    logLevel: broker.options.logLevel,
+    cssh: scStateSocketOptions.hostname,
+    cssp: scStateSocketOptions.port,
+    sccBrokerClientPort: broker.options.port
+  };
+  sccSemverReporter.attach(stateSocket, sccSemverReportOptions);
+
   stateSocket.on('error', (err) => {
     clusterClient.emit('error', err);
   });
