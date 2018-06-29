@@ -44,8 +44,8 @@ module.exports.attach = function (broker, options) {
     query: {
       authKey,
       instancePort,
-      instanceType: 'scc-broker-client',
-      semver: packageVersion
+      instanceType: 'scc-worker',
+      version: packageVersion
     }
   };
   var stateSocket = scClient.connect(scStateSocketOptions);
