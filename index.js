@@ -1,5 +1,6 @@
 var scClient = require('socketcluster-client');
 var ClusterBrokerClient = require('./cluster-broker-client');
+var packageVersion = require('./package.json').version;
 
 var DEFAULT_PORT = 7777;
 var DEFAULT_MESSAGE_CACHE_DURATION = 10000;
@@ -28,9 +29,10 @@ module.exports.attach = function (broker, options) {
 
   var retryDelay = options.brokerRetryDelay || DEFAULT_RETRY_DELAY;
 
+  var instancePort = options.stateServerPort || DEFAULT_PORT;
   var scStateSocketOptions = {
     hostname: options.stateServerHost, // Required option
-    port: options.stateServerPort || DEFAULT_PORT,
+    port: instancePort,
     connectTimeout: options.stateServerConnectTimeout || DEFAULT_STATE_SERVER_CONNECT_TIMEOUT,
     ackTimeout: options.stateServerAckTimeout || DEFAULT_STATE_SERVER_ACK_TIMEOUT,
     autoReconnectOptions: {
@@ -40,7 +42,10 @@ module.exports.attach = function (broker, options) {
       maxDelay: retryDelay + reconnectRandomness
     },
     query: {
-      authKey: authKey
+      authKey,
+      instancePort,
+      instanceType: 'scc-worker',
+      version: packageVersion
     }
   };
   var stateSocket = scClient.connect(scStateSocketOptions);
