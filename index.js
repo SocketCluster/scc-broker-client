@@ -29,10 +29,9 @@ module.exports.attach = function (broker, options) {
 
   var retryDelay = options.brokerRetryDelay || DEFAULT_RETRY_DELAY;
 
-  var instancePort = options.stateServerPort || DEFAULT_PORT;
   var scStateSocketOptions = {
     hostname: options.stateServerHost, // Required option
-    port: instancePort,
+    port: options.stateServerPort || DEFAULT_PORT,
     connectTimeout: options.stateServerConnectTimeout || DEFAULT_STATE_SERVER_CONNECT_TIMEOUT,
     ackTimeout: options.stateServerAckTimeout || DEFAULT_STATE_SERVER_ACK_TIMEOUT,
     autoReconnectOptions: {
@@ -43,7 +42,7 @@ module.exports.attach = function (broker, options) {
     },
     query: {
       authKey,
-      instancePort,
+      instancePort: broker.options.port,
       instanceType: 'scc-worker',
       version: packageVersion
     }
