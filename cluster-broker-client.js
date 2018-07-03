@@ -138,20 +138,16 @@ ClusterBrokerClient.prototype._getAllUpstreamBrokerSubscriptions = function () {
 };
 
 ClusterBrokerClient.prototype.getAllSubscriptions = function () {
-  var visitedClientLookup = {};
   var channelLookup = {};
 
   Object.keys(this.sccBrokerClientPools).forEach((clientURI) => {
     var clientPool = this.sccBrokerClientPools[clientURI];
-    if (!visitedClientLookup[clientURI]) {
-      visitedClientLookup[clientURI] = true;
-      var subs = clientPool.subscriptions(true);
-      subs.forEach((channelName) => {
-        if (!channelLookup[channelName]) {
-          channelLookup[channelName] = true;
-        }
-      });
-    }
+    var subs = clientPool.subscriptions(true);
+    subs.forEach((channelName) => {
+      if (!channelLookup[channelName]) {
+        channelLookup[channelName] = true;
+      }
+    });
   });
   var localBrokerSubscriptions = this._getAllUpstreamBrokerSubscriptions();
   localBrokerSubscriptions.forEach((channelName) => {
