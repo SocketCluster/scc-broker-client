@@ -29,17 +29,17 @@ ClusterBrokerClient.prototype = Object.create(EventEmitter.prototype);
 
 ClusterBrokerClient.prototype.errors = {
   NoMatchingSubscribeTargetError: function (channelName) {
-    var err = new Error(`Could not find a matching subscribe target scc-broker for the ${channelName} channel - The scc-broker may be down.`);
+    var err = new Error(`Could not find a matching subscribe target scc-broker for the ${channelName} channel - The scc-broker may be down`);
     err.name = 'NoMatchingSubscribeTargetError';
     return err;
   },
   NoMatchingUnsubscribeTargetError: function (channelName) {
-    var err = new Error(`Could not find a matching unsubscribe target scc-broker for the ${channelName} channel - The scc-broker may be down.`);
+    var err = new Error(`Could not find a matching unsubscribe target scc-broker for the ${channelName} channel - The scc-broker may be down`);
     err.name = 'NoMatchingUnsubscribeTargetError';
     return err;
   },
   NoMatchingPublishTargetError: function (channelName) {
-    var err = new Error(`Could not find a matching publish target scc-broker for the ${channelName} channel - The scc-broker may be down.`);
+    var err = new Error(`Could not find a matching publish target scc-broker for the ${channelName} channel - The scc-broker may be down`);
     err.name = 'NoMatchingPublishTargetError';
     return err;
   }
