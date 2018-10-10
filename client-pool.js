@@ -83,7 +83,7 @@ ClientPool.prototype.breakDownURI = function (uri) {
     hostname: hostname,
     port: parsedURI.port
   };
-  if (parsedURI.protocol == 'wss:' || parsedURI.protocol == 'https:') {
+  if (parsedURI.protocol === 'wss:' || parsedURI.protocol === 'https:') {
     result.secure = true;
   }
   return result;
