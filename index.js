@@ -10,6 +10,7 @@ var DEFAULT_STATE_SERVER_ACK_TIMEOUT = 2000;
 
 var DEFAULT_RECONNECT_RANDOMNESS = 1000;
 
+
 module.exports.attach = function (broker, options) {
   var reconnectRandomness = options.stateServerReconnectRandomness || DEFAULT_RECONNECT_RANDOMNESS;
   var authKey = options.authKey || null;
@@ -19,12 +20,12 @@ module.exports.attach = function (broker, options) {
     mappingEngine: options.mappingEngine,
     clientPoolSize: options.clientPoolSize,
   });
-  if (options.noErrorLogging) {
-    clusterClient.on('error', (err) => {});
-  } else {
-    clusterClient.on('error', (err) => {
-      console.error(err);
-    });
+  if (!options.noErrorLogging) {
+    (async () => {
+      for await (let {error} of clusterClient.listener('error')) {
+        console.error(error);
+      }
+    })();
   }
 
   var retryDelay = options.brokerRetryDelay || DEFAULT_RETRY_DELAY;
@@ -48,9 +49,11 @@ module.exports.attach = function (broker, options) {
     }
   };
   var stateSocket = agClient.create(scStateSocketOptions);
-  stateSocket.on('error', (err) => {
-    clusterClient.emit('error', err);
-  });
+  (async () => {
+    for await (let event of stateSocket.listener('error')) {
+      clusterClient.emit('error', event);
+    }
+  })();
 
   var latestSnapshotTime = -1;
 
@@ -66,16 +69,24 @@ module.exports.attach = function (broker, options) {
     latestSnapshotTime = -1;
   };
 
-  var updateBrokerMapping = (data, respond) => {
-    var updated = isNewSnapshot(data);
+  var updateBrokerMapping = (req) => {
+    var updated = isNewSnapshot(req.data);
     if (updated) {
-      clusterClient.setBrokers(data.agcBrokerURIs);
+      clusterClient.setBrokers(req.data.agcBrokerURIs);
     }
-    respond();
+    req.end();
   };
 
-  stateSocket.on('agcBrokerJoinCluster', updateBrokerMapping);
-  stateSocket.on('agcBrokerLeaveCluster', updateBrokerMapping);
+  (async () => {
+    for await (let req of stateSocket.procedure('agcBrokerJoinCluster')) {
+      updateBrokerMapping(req);
+    }
+  })();
+  (async () => {
+    for await (let req of stateSocket.procedure('agcBrokerLeaveCluster')) {
+      updateBrokerMapping(req);
+    }
+  })();
 
   var agcWorkerStateData = {
     instanceId: options.instanceId
@@ -84,17 +95,24 @@ module.exports.attach = function (broker, options) {
   agcWorkerStateData.instanceIp = options.instanceIp;
   agcWorkerStateData.instanceIpFamily = options.instanceIpFamily || 'IPv4';
 
-  var emitAGCWorkerJoinCluster = () => {
-    stateSocket.emit('agcWorkerJoinCluster', agcWorkerStateData, (err, data) => {
-      if (err) {
-        setTimeout(emitAGCWorkerJoinCluster, retryDelay);
-        return;
-      }
-      resetSnapshotTime();
-      clusterClient.setBrokers(data.agcBrokerURIs);
-    });
+  var emitAGCWorkerJoinCluster = async () => {
+    let data;
+    try {
+      data = await stateSocket.invoke('agcWorkerJoinCluster');
+    } catch (error) {
+      stateSocket.emit('error', {error});
+      setTimeout(emitAGCWorkerJoinCluster, retryDelay);
+      return;
+    }
+    resetSnapshotTime();
+    clusterClient.setBrokers(data.agcBrokerURIs);
   };
-  stateSocket.on('connect', emitAGCWorkerJoinCluster);
+
+  (async () => {
+    for await (let event of stateSocket.listener('connect')) {
+      emitAGCWorkerJoinCluster();
+    }
+  })();
 
   var clusterMessageHandler = (channelName, packet) => {
     if ((packet.sender == null || packet.sender !== options.instanceId) && packet.messages && packet.messages.length) {
@@ -103,7 +121,11 @@ module.exports.attach = function (broker, options) {
       });
     }
   };
-  clusterClient.on('message', clusterMessageHandler);
+  (async () => {
+    for await (let {channel, packet} of clusterClient.listener('message')) {
+      clusterMessageHandler(channel, packet);
+    }
+  })();
 
   (async () => {
     for await (let {channel} of broker.listener('subscribe')) {

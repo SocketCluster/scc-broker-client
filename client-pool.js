@@ -1,13 +1,13 @@
 var url = require('url');
 var agClient = require('asyngular-client');
-var EventEmitter = require('events').EventEmitter;
+var AsyncStreamEmitter = require('async-stream-emitter');
 var Hasher = require('./hasher');
 
 var trailingPortNumberRegex = /:[0-9]+$/;
 
 function ClientPool(options) {
+  AsyncStreamEmitter.call(this);
   var self = this;
-  EventEmitter.call(this);
 
   options = options || {};
   this.hasher = new Hasher();
@@ -22,8 +22,8 @@ function ClientPool(options) {
     authKey: this.authKey
   };
 
-  this._handleClientError = function (err) {
-    self.emit('error', err);
+  this._handleClientError = function (event) {
+    self.emit('error', event);
   };
   this._handleClientSubscribe = function (channelName) {
     var client = this;
@@ -33,12 +33,12 @@ function ClientPool(options) {
       channel: channelName
     });
   };
-  this._handleClientSubscribeFail = function (err, channelName) {
+  this._handleClientSubscribeFail = function (error, channelName) {
     var client = this;
     self.emit('subscribeFail', {
       targetURI: self.targetURI,
       poolIndex: client.poolIndex,
-      error: err,
+      error,
       channel: channelName
     });
   };
@@ -50,28 +50,44 @@ function ClientPool(options) {
     connectOptions.query.poolIndex = i;
     var client = agClient.create(connectOptions);
     client.poolIndex = i;
-    client.on('error', this._handleClientError);
+    (async () => {
+      for await (let event of client.listener('error')) {
+        this._handleClientError(event);
+      }
+    })();
     this.clients.push(client);
   }
 }
 
-ClientPool.prototype = Object.create(EventEmitter.prototype);
+ClientPool.prototype = Object.create(AsyncStreamEmitter.prototype);
 
 ClientPool.prototype.bindClientListeners = function () {
   this.unbindClientListeners();
   this.clients.forEach((client) => {
-    client.on('error', this._handleClientError);
-    client.on('subscribe', this._handleClientSubscribe);
-    client.on('subscribeFail', this._handleClientSubscribeFail);
+    (async () => {
+      for await (let event of client.listener('error')) {
+        this._handleClientError(event);
+      }
+    })();
+    (async () => {
+      for await (let {channel} of client.listener('subscribe')) {
+        this._handleClientSubscribe(channel);
+      }
+    })();
+    (async () => {
+      for await (let {error, channel} of client.listener('subscribeFail')) {
+        this._handleClientSubscribeFail(error, channel);
+      }
+    })();
   });
   this.areClientListenersBound = true;
 };
 
 ClientPool.prototype.unbindClientListeners = function () {
   this.clients.forEach((client) => {
-    client.removeListener('error', this._handleClientError);
-    client.removeListener('subscribe', this._handleClientSubscribe);
-    client.removeListener('subscribeFail', this._handleClientSubscribeFail);
+    client.closeListener('error');
+    client.closeListener('subscribe');
+    client.closeListener('subscribeFail');
   });
   this.areClientListenersBound = false;
 };
@@ -106,7 +122,7 @@ ClientPool.prototype.publish = function (channelName, data) {
           targetURI: this.targetURI,
           poolIndex: targetClient.poolIndex,
           channel: channelName,
-          data: data
+          data
         });
         return;
       }
@@ -114,7 +130,7 @@ ClientPool.prototype.publish = function (channelName, data) {
         targetURI: this.targetURI,
         poolIndex: targetClient.poolIndex,
         channel: channelName,
-        data: data
+        data
       });
     });
   }

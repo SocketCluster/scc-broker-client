@@ -1,11 +1,12 @@
 var ClientPool = require('./client-pool');
-var EventEmitter = require('events').EventEmitter;
+var AsyncStreamEmitter = require('async-stream-emitter');
 var SimpleMapper = require('./mappers/simple-mapper');
 var SkeletonRendezvousMapper = require('./mappers/skeleton-rendezvous-mapper');
 
-var ClusterBrokerClient = function (broker, options) {
+function ClusterBrokerClient(broker, options) {
+  AsyncStreamEmitter.call(this);
+
   options = options || {};
-  EventEmitter.call(this);
   this.broker = broker;
   this.agcBrokerClientPools = {};
   this.agcBrokerURIList = [];
@@ -23,9 +24,9 @@ var ClusterBrokerClient = function (broker, options) {
     }
     this.mapper = this.mappingEngine;
   }
-};
+}
 
-ClusterBrokerClient.prototype = Object.create(EventEmitter.prototype);
+ClusterBrokerClient.prototype = Object.create(AsyncStreamEmitter.prototype);
 
 ClusterBrokerClient.prototype.errors = {
   NoMatchingSubscribeTargetError: function (channelName) {
@@ -60,28 +61,38 @@ ClusterBrokerClient.prototype.setBrokers = function (agcBrokerURIList) {
     var previousClientPool = this.agcBrokerClientPools[clientURI];
     if (previousClientPool) {
       previousClientPool.unbindClientListeners();
-      previousClientPool.removeAllListeners();
+      previousClientPool.closeAllListeners();
     }
     var clientPool = new ClientPool({
       clientCount: this.clientPoolSize,
       targetURI: clientURI,
       authKey: this.authKey
     });
-    clientPool.on('error', (err) => {
-      this.emit('error', err);
-    });
-    clientPool.on('subscribe', (data) => {
-      this.emit('subscribe', data);
-    });
-    clientPool.on('subscribeFail', (data) => {
-      this.emit('subscribeFail', data);
-    });
-    clientPool.on('publish', (data) => {
-      this.emit('publish', data);
-    });
-    clientPool.on('publishFail', (data) => {
-      this.emit('publishFail', data);
-    });
+    (async () => {
+      for await (let event of clientPool.listener('error')) {
+        this.emit('error', event);
+      }
+    })();
+    (async () => {
+      for await (let event of clientPool.listener('subscribe')) {
+        this.emit('subscribe', event);
+      }
+    })();
+    (async () => {
+      for await (let event of clientPool.listener('subscribeFail')) {
+        this.emit('subscribeFail', event);
+      }
+    })();
+    (async () => {
+      for await (let event of clientPool.listener('publish')) {
+        this.emit('publish', event);
+      }
+    })();
+    (async () => {
+      for await (let event of clientPool.listener('publishFail')) {
+        this.emit('publishFail', event);
+      }
+    })();
     clientPool.bindClientListeners();
     brokerClientMap[clientURI] = clientPool;
     this.agcBrokerClientPools[clientURI] = clientPool;
@@ -145,7 +156,10 @@ ClusterBrokerClient.prototype.getAllSubscriptions = function () {
 };
 
 ClusterBrokerClient.prototype._handleChannelMessage = function (channelName, packet) {
-  this.emit('message', channelName, packet);
+  this.emit('message', {
+    channel: channelName,
+    packet
+  });
 };
 
 ClusterBrokerClient.prototype._subscribeClientPoolToChannelAndWatch = function (clientPool, channelName) {
@@ -160,8 +174,8 @@ ClusterBrokerClient.prototype.subscribe = function (channelName) {
   if (targetAGCBrokerClientPool) {
     this._subscribeClientPoolToChannelAndWatch(targetAGCBrokerClientPool, channelName);
   } else {
-    var err = this.errors.NoMatchingSubscribeTargetError(channelName);
-    this.emit('error', err);
+    var error = this.errors.NoMatchingSubscribeTargetError(channelName);
+    this.emit('error', {error});
   }
 };
 
@@ -171,8 +185,8 @@ ClusterBrokerClient.prototype.unsubscribe = function (channelName) {
   if (targetAGCBrokerClientPool) {
     targetAGCBrokerClientPool.destroyChannel(channelName);
   } else {
-    var err = this.errors.NoMatchingUnsubscribeTargetError(channelName);
-    this.emit('error', err);
+    var error = this.errors.NoMatchingUnsubscribeTargetError(channelName);
+    this.emit('error', {error});
   }
 };
 
@@ -182,8 +196,8 @@ ClusterBrokerClient.prototype.publish = function (channelName, data) {
   if (targetAGCBrokerClientPool) {
     targetAGCBrokerClientPool.publish(channelName, data);
   } else {
-    var err = this.errors.NoMatchingPublishTargetError(channelName);
-    this.emit('error', err);
+    var error = this.errors.NoMatchingPublishTargetError(channelName);
+    this.emit('error', {error});
   }
 };
 
