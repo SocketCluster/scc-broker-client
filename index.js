@@ -1,21 +1,20 @@
-var agClient = require('asyngular-client');
-var ClusterBrokerClient = require('./cluster-broker-client');
-var packageVersion = require('./package.json').version;
+const agClient = require('asyngular-client');
+const ClusterBrokerClient = require('./cluster-broker-client');
+const packageVersion = require('./package.json').version;
 
-var DEFAULT_PORT = 7777;
-var DEFAULT_MESSAGE_CACHE_DURATION = 10000;
-var DEFAULT_RETRY_DELAY = 2000;
-var DEFAULT_STATE_SERVER_CONNECT_TIMEOUT = 3000;
-var DEFAULT_STATE_SERVER_ACK_TIMEOUT = 2000;
+const DEFAULT_PORT = 7777;
+const DEFAULT_RETRY_DELAY = 2000;
+const DEFAULT_STATE_SERVER_CONNECT_TIMEOUT = 3000;
+const DEFAULT_STATE_SERVER_ACK_TIMEOUT = 2000;
 
-var DEFAULT_RECONNECT_RANDOMNESS = 1000;
+const DEFAULT_RECONNECT_RANDOMNESS = 1000;
 
 
 module.exports.attach = function (broker, options) {
-  var reconnectRandomness = options.stateServerReconnectRandomness || DEFAULT_RECONNECT_RANDOMNESS;
-  var authKey = options.authKey || null;
+  let reconnectRandomness = options.stateServerReconnectRandomness || DEFAULT_RECONNECT_RANDOMNESS;
+  let authKey = options.authKey || null;
 
-  var clusterClient = new ClusterBrokerClient(broker, {
+  let clusterClient = new ClusterBrokerClient(broker, {
     authKey: authKey,
     mappingEngine: options.mappingEngine,
     clientPoolSize: options.clientPoolSize,
@@ -28,9 +27,9 @@ module.exports.attach = function (broker, options) {
     })();
   }
 
-  var retryDelay = options.brokerRetryDelay || DEFAULT_RETRY_DELAY;
+  let retryDelay = options.brokerRetryDelay || DEFAULT_RETRY_DELAY;
 
-  var scStateSocketOptions = {
+  let scStateSocketOptions = {
     hostname: options.stateServerHost, // Required option
     port: options.stateServerPort || DEFAULT_PORT,
     connectTimeout: options.stateServerConnectTimeout || DEFAULT_STATE_SERVER_CONNECT_TIMEOUT,
@@ -48,16 +47,16 @@ module.exports.attach = function (broker, options) {
       version: packageVersion
     }
   };
-  var stateSocket = agClient.create(scStateSocketOptions);
+  let stateSocket = agClient.create(scStateSocketOptions);
   (async () => {
     for await (let event of stateSocket.listener('error')) {
       clusterClient.emit('error', event);
     }
   })();
 
-  var latestSnapshotTime = -1;
+  let latestSnapshotTime = -1;
 
-  var isNewSnapshot = (updatePacket) => {
+  let isNewSnapshot = (updatePacket) => {
     if (updatePacket.time > latestSnapshotTime) {
       latestSnapshotTime = updatePacket.time;
       return true;
@@ -65,12 +64,12 @@ module.exports.attach = function (broker, options) {
     return false;
   };
 
-  var resetSnapshotTime = () => {
+  let resetSnapshotTime = () => {
     latestSnapshotTime = -1;
   };
 
-  var updateBrokerMapping = (req) => {
-    var updated = isNewSnapshot(req.data);
+  let updateBrokerMapping = (req) => {
+    let updated = isNewSnapshot(req.data);
     if (updated) {
       clusterClient.setBrokers(req.data.agcBrokerURIs);
     }
@@ -88,14 +87,14 @@ module.exports.attach = function (broker, options) {
     }
   })();
 
-  var agcWorkerStateData = {
+  let agcWorkerStateData = {
     instanceId: options.instanceId
   };
 
   agcWorkerStateData.instanceIp = options.instanceIp;
   agcWorkerStateData.instanceIpFamily = options.instanceIpFamily || 'IPv4';
 
-  var emitAGCWorkerJoinCluster = async () => {
+  let emitAGCWorkerJoinCluster = async () => {
     let data;
     try {
       data = await stateSocket.invoke('agcWorkerJoinCluster');
@@ -114,7 +113,7 @@ module.exports.attach = function (broker, options) {
     }
   })();
 
-  var clusterMessageHandler = (channelName, packet) => {
+  let clusterMessageHandler = (channelName, packet) => {
     if ((packet.sender == null || packet.sender !== options.instanceId) && packet.messages && packet.messages.length) {
       packet.messages.forEach((data) => {
         broker.publish(channelName, data);
@@ -139,12 +138,12 @@ module.exports.attach = function (broker, options) {
     }
   })();
 
-  var publishOutboundBuffer = {};
-  var publishTimeout = null;
+  let publishOutboundBuffer = {};
+  let publishTimeout = null;
 
-  var flushPublishOutboundBuffer = () => {
+  let flushPublishOutboundBuffer = () => {
     Object.keys(publishOutboundBuffer).forEach((channelName) => {
-      var packet = {
+      let packet = {
         sender: options.instanceId || null,
         messages: publishOutboundBuffer[channelName],
       };
@@ -158,7 +157,7 @@ module.exports.attach = function (broker, options) {
   (async () => {
     for await (let {channel, data} of broker.listener('publish')) {
       if (options.pubSubBatchDuration == null) {
-        var packet = {
+        let packet = {
           sender: options.instanceId || null,
           messages: [data],
         };

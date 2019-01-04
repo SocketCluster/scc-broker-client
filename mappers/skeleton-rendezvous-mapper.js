@@ -1,4 +1,4 @@
-var SkeletonRendezvousHasher = require('skeleton-rendezvous');
+const SkeletonRendezvousHasher = require('skeleton-rendezvous');
 
 function SkeletonRendezvousMapper(options) {
   this.hasher = new SkeletonRendezvousHasher(options);

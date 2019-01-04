@@ -1,13 +1,12 @@
-var url = require('url');
-var agClient = require('asyngular-client');
-var AsyncStreamEmitter = require('async-stream-emitter');
-var Hasher = require('./hasher');
+const url = require('url');
+const agClient = require('asyngular-client');
+const AsyncStreamEmitter = require('async-stream-emitter');
+const Hasher = require('./hasher');
 
-var trailingPortNumberRegex = /:[0-9]+$/;
+const trailingPortNumberRegex = /:[0-9]+$/;
 
 function ClientPool(options) {
   AsyncStreamEmitter.call(this);
-  var self = this;
 
   options = options || {};
   this.hasher = new Hasher();
@@ -17,26 +16,26 @@ function ClientPool(options) {
 
   this.areClientListenersBound = false;
 
-  var clientConnectOptions = this.breakDownURI(this.targetURI);
+  let clientConnectOptions = this.breakDownURI(this.targetURI);
   clientConnectOptions.query = {
     authKey: this.authKey
   };
 
-  this._handleClientError = function (event) {
-    self.emit('error', event);
+  this._handleClientError = (event) => {
+    this.emit('error', event);
   };
-  this._handleClientSubscribe = function (channelName) {
-    var client = this;
-    self.emit('subscribe', {
-      targetURI: self.targetURI,
+  this._handleClientSubscribe = (channelName) => {
+    let client = this;
+    this.emit('subscribe', {
+      targetURI: this.targetURI,
       poolIndex: client.poolIndex,
       channel: channelName
     });
   };
-  this._handleClientSubscribeFail = function (error, channelName) {
-    var client = this;
-    self.emit('subscribeFail', {
-      targetURI: self.targetURI,
+  this._handleClientSubscribeFail = (error, channelName) => {
+    let client = this;
+    this.emit('subscribeFail', {
+      targetURI: this.targetURI,
       poolIndex: client.poolIndex,
       error,
       channel: channelName
@@ -45,10 +44,10 @@ function ClientPool(options) {
 
   this.clients = [];
 
-  for (var i = 0; i < this.clientCount; i++) {
-    var connectOptions = Object.assign({}, clientConnectOptions);
+  for (let i = 0; i < this.clientCount; i++) {
+    let connectOptions = Object.assign({}, clientConnectOptions);
     connectOptions.query.poolIndex = i;
-    var client = agClient.create(connectOptions);
+    let client = agClient.create(connectOptions);
     client.poolIndex = i;
     (async () => {
       for await (let event of client.listener('error')) {
@@ -93,9 +92,9 @@ ClientPool.prototype.unbindClientListeners = function () {
 };
 
 ClientPool.prototype.breakDownURI = function (uri) {
-  var parsedURI = url.parse(uri);
-  var hostname = parsedURI.host.replace(trailingPortNumberRegex, '');
-  var result = {
+  let parsedURI = url.parse(uri);
+  let hostname = parsedURI.host.replace(trailingPortNumberRegex, '');
+  let result = {
     hostname: hostname,
     port: parsedURI.port
   };
@@ -106,12 +105,12 @@ ClientPool.prototype.breakDownURI = function (uri) {
 };
 
 ClientPool.prototype.selectClient = function (key) {
-  var targetIndex = this.hasher.hashToIndex(key, this.clients.length);
+  let targetIndex = this.hasher.hashToIndex(key, this.clients.length);
   return this.clients[targetIndex];
 };
 
 ClientPool.prototype.publish = function (channelName, data) {
-  var targetClient = this.selectClient(channelName);
+  let targetClient = this.selectClient(channelName);
   if (this.areClientListenersBound) {
     return targetClient.publish(channelName, data, (err) => {
       if (!this.areClientListenersBound) {
@@ -138,9 +137,9 @@ ClientPool.prototype.publish = function (channelName, data) {
 };
 
 ClientPool.prototype.subscriptions = function (includePending) {
-  var subscriptionList = [];
+  let subscriptionList = [];
   this.clients.forEach((client) => {
-    var clientSubList = client.subscriptions(includePending);
+    let clientSubList = client.subscriptions(includePending);
     clientSubList.forEach((subscription) => {
       subscriptionList.push(subscription);
     });
@@ -149,7 +148,7 @@ ClientPool.prototype.subscriptions = function (includePending) {
 };
 
 ClientPool.prototype.subscribeAndWatch = function (channelName, handler) {
-  var targetClient = this.selectClient(channelName);
+  let targetClient = this.selectClient(channelName);
   targetClient.subscribe(channelName);
   if (!targetClient.watchers(channelName).length) {
     targetClient.watch(channelName, (data) => {
@@ -159,7 +158,7 @@ ClientPool.prototype.subscribeAndWatch = function (channelName, handler) {
 };
 
 ClientPool.prototype.destroyChannel = function (channelName) {
-  var targetClient = this.selectClient(channelName);
+  let targetClient = this.selectClient(channelName);
   return targetClient.destroyChannel(channelName);
 };
 

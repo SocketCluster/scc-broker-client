@@ -1,12 +1,12 @@
-var crypto = require('crypto');
+const crypto = require('crypto');
 
 function Hasher() {}
 
 Hasher.prototype.hashToIndex = function (key, modulo) {
-  var ch;
-  var hash = key;
+  let ch;
+  let hash = key;
 
-  for (var i = 0; i < key.length; i++) {
+  for (let i = 0; i < key.length; i++) {
     ch = key.charCodeAt(i);
     hash = ((hash << 5) - hash) + ch;
     hash = hash & hash;
@@ -15,7 +15,7 @@ Hasher.prototype.hashToIndex = function (key, modulo) {
 };
 
 Hasher.prototype.hashToHex = function (key, algorithm) {
-  var hasher = crypto.createHash(algorithm || 'md5');
+  let hasher = crypto.createHash(algorithm || 'md5');
   hasher.update(key);
   return hasher.digest('hex');
 };

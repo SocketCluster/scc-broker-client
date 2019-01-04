@@ -1,4 +1,4 @@
-var Hasher = require('../hasher');
+const Hasher = require('../hasher');
 
 function SimpleMapper() {
   this.hasher = new Hasher();
@@ -15,8 +15,8 @@ SimpleMapper.prototype.getSites = function () {
 
 SimpleMapper.prototype.findSite = function (key) {
   key = this.hasher.hashToHex(key);
-  var sites = this.sites;
-  var targetIndex = this.hasher.hashToIndex(key, sites.length);
+  let sites = this.sites;
+  let targetIndex = this.hasher.hashToIndex(key, sites.length);
   return sites[targetIndex];
 };
 
