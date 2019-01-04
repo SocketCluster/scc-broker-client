@@ -125,18 +125,6 @@ ClusterBrokerClient.prototype.setBrokers = function (sccBrokerURIList) {
   });
 };
 
-ClusterBrokerClient.prototype._getAllUpstreamBrokerSubscriptions = function () {
-  var channelMap = {};
-  var workerChannelMaps = Object.keys(this.broker.subscriptions);
-  workerChannelMaps.forEach((index) => {
-    var workerChannels = Object.keys(this.broker.subscriptions[index]);
-    workerChannels.forEach((channelName) => {
-      channelMap[channelName] = true;
-    });
-  });
-  return Object.keys(channelMap);
-};
-
 ClusterBrokerClient.prototype.getAllSubscriptions = function () {
   var channelLookup = {};
 
@@ -149,7 +137,7 @@ ClusterBrokerClient.prototype.getAllSubscriptions = function () {
       }
     });
   });
-  var localBrokerSubscriptions = this._getAllUpstreamBrokerSubscriptions();
+  var localBrokerSubscriptions = this.broker.subscriptions();
   localBrokerSubscriptions.forEach((channelName) => {
     channelLookup[channelName] = true;
   });
