@@ -81,8 +81,8 @@ module.exports.attach = function (broker, options) {
     instanceId: options.instanceId
   };
 
-  agcWorkerStateData.instanceIp = options.clusterInstanceIp;
-  agcWorkerStateData.instanceIpFamily = options.clusterInstanceIpFamily || 'IPv4';
+  agcWorkerStateData.instanceIp = options.instanceIp;
+  agcWorkerStateData.instanceIpFamily = options.instanceIpFamily || 'IPv4';
 
   var emitAGCWorkerJoinCluster = () => {
     stateSocket.emit('agcWorkerJoinCluster', agcWorkerStateData, (err, data) => {
