@@ -1,4 +1,4 @@
-var scClient = require('socketcluster-client');
+var agClient = require('asyngular-client');
 var ClusterBrokerClient = require('./cluster-broker-client');
 var packageVersion = require('./package.json').version;
 
@@ -47,7 +47,7 @@ module.exports.attach = function (broker, options) {
       version: packageVersion
     }
   };
-  var stateSocket = scClient.connect(scStateSocketOptions);
+  var stateSocket = agClient.create(scStateSocketOptions);
   stateSocket.on('error', (err) => {
     clusterClient.emit('error', err);
   });

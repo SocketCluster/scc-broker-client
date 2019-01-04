@@ -1,5 +1,5 @@
 var url = require('url');
-var scClient = require('socketcluster-client');
+var agClient = require('asyngular-client');
 var EventEmitter = require('events').EventEmitter;
 var Hasher = require('./hasher');
 
@@ -48,7 +48,7 @@ function ClientPool(options) {
   for (var i = 0; i < this.clientCount; i++) {
     var connectOptions = Object.assign({}, clientConnectOptions);
     connectOptions.query.poolIndex = i;
-    var client = scClient.create(connectOptions);
+    var client = agClient.create(connectOptions);
     client.poolIndex = i;
     client.on('error', this._handleClientError);
     this.clients.push(client);
