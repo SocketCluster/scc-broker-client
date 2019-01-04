@@ -43,7 +43,7 @@ module.exports.attach = function (broker, options) {
     query: {
       authKey,
       instancePort: options.instancePort,
-      instanceType: 'scc-worker',
+      instanceType: 'agc-worker',
       version: packageVersion
     }
   };
@@ -69,32 +69,32 @@ module.exports.attach = function (broker, options) {
   var updateBrokerMapping = (data, respond) => {
     var updated = isNewSnapshot(data);
     if (updated) {
-      clusterClient.setBrokers(data.sccBrokerURIs);
+      clusterClient.setBrokers(data.agcBrokerURIs);
     }
     respond();
   };
 
-  stateSocket.on('sccBrokerJoinCluster', updateBrokerMapping);
-  stateSocket.on('sccBrokerLeaveCluster', updateBrokerMapping);
+  stateSocket.on('agcBrokerJoinCluster', updateBrokerMapping);
+  stateSocket.on('agcBrokerLeaveCluster', updateBrokerMapping);
 
-  var sccWorkerStateData = {
+  var agcWorkerStateData = {
     instanceId: options.instanceId
   };
 
-  sccWorkerStateData.instanceIp = options.clusterInstanceIp;
-  sccWorkerStateData.instanceIpFamily = options.clusterInstanceIpFamily || 'IPv4';
+  agcWorkerStateData.instanceIp = options.clusterInstanceIp;
+  agcWorkerStateData.instanceIpFamily = options.clusterInstanceIpFamily || 'IPv4';
 
-  var emitSCCWorkerJoinCluster = () => {
-    stateSocket.emit('sccWorkerJoinCluster', sccWorkerStateData, (err, data) => {
+  var emitAGCWorkerJoinCluster = () => {
+    stateSocket.emit('agcWorkerJoinCluster', agcWorkerStateData, (err, data) => {
       if (err) {
-        setTimeout(emitSCCWorkerJoinCluster, retryDelay);
+        setTimeout(emitAGCWorkerJoinCluster, retryDelay);
         return;
       }
       resetSnapshotTime();
-      clusterClient.setBrokers(data.sccBrokerURIs);
+      clusterClient.setBrokers(data.agcBrokerURIs);
     });
   };
-  stateSocket.on('connect', emitSCCWorkerJoinCluster);
+  stateSocket.on('connect', emitAGCWorkerJoinCluster);
 
   var clusterMessageHandler = (channelName, packet) => {
     if ((packet.sender == null || packet.sender !== options.instanceId) && packet.messages && packet.messages.length) {

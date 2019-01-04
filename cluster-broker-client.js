@@ -7,8 +7,8 @@ var ClusterBrokerClient = function (broker, options) {
   options = options || {};
   EventEmitter.call(this);
   this.broker = broker;
-  this.sccBrokerClientPools = {};
-  this.sccBrokerURIList = [];
+  this.agcBrokerClientPools = {};
+  this.agcBrokerURIList = [];
   this.authKey = options.authKey || null;
   this.mappingEngine = options.mappingEngine || 'skeletonRendezvous';
   this.clientPoolSize = options.clientPoolSize || 1;
@@ -29,17 +29,17 @@ ClusterBrokerClient.prototype = Object.create(EventEmitter.prototype);
 
 ClusterBrokerClient.prototype.errors = {
   NoMatchingSubscribeTargetError: function (channelName) {
-    var err = new Error(`Could not find a matching subscribe target scc-broker for the ${channelName} channel - The scc-broker may be down`);
+    var err = new Error(`Could not find a matching subscribe target agc-broker for the ${channelName} channel - The agc-broker may be down`);
     err.name = 'NoMatchingSubscribeTargetError';
     return err;
   },
   NoMatchingUnsubscribeTargetError: function (channelName) {
-    var err = new Error(`Could not find a matching unsubscribe target scc-broker for the ${channelName} channel - The scc-broker may be down`);
+    var err = new Error(`Could not find a matching unsubscribe target agc-broker for the ${channelName} channel - The agc-broker may be down`);
     err.name = 'NoMatchingUnsubscribeTargetError';
     return err;
   },
   NoMatchingPublishTargetError: function (channelName) {
-    var err = new Error(`Could not find a matching publish target scc-broker for the ${channelName} channel - The scc-broker may be down`);
+    var err = new Error(`Could not find a matching publish target agc-broker for the ${channelName} channel - The agc-broker may be down`);
     err.name = 'NoMatchingPublishTargetError';
     return err;
   }
@@ -49,15 +49,15 @@ ClusterBrokerClient.prototype.mapChannelNameToBrokerURI = function (channelName)
   return this.mapper.findSite(channelName);
 };
 
-ClusterBrokerClient.prototype.setBrokers = function (sccBrokerURIList) {
-  this.sccBrokerURIList = sccBrokerURIList.concat();
-  this.mapper.setSites(this.sccBrokerURIList);
+ClusterBrokerClient.prototype.setBrokers = function (agcBrokerURIList) {
+  this.agcBrokerURIList = agcBrokerURIList.concat();
+  this.mapper.setSites(this.agcBrokerURIList);
 
   var brokerClientMap = {};
   var fullSubscriptionList = this.getAllSubscriptions();
 
-  this.sccBrokerURIList.forEach((clientURI) => {
-    var previousClientPool = this.sccBrokerClientPools[clientURI];
+  this.agcBrokerURIList.forEach((clientURI) => {
+    var previousClientPool = this.agcBrokerClientPools[clientURI];
     if (previousClientPool) {
       previousClientPool.unbindClientListeners();
       previousClientPool.removeAllListeners();
@@ -84,31 +84,31 @@ ClusterBrokerClient.prototype.setBrokers = function (sccBrokerURIList) {
     });
     clientPool.bindClientListeners();
     brokerClientMap[clientURI] = clientPool;
-    this.sccBrokerClientPools[clientURI] = clientPool;
+    this.agcBrokerClientPools[clientURI] = clientPool;
   });
 
-  var unusedSCCBrokerURIList = Object.keys(this.sccBrokerClientPools).filter((clientURI) => {
+  var unusedAGCBrokerURIList = Object.keys(this.agcBrokerClientPools).filter((clientURI) => {
     return !brokerClientMap[clientURI];
   });
-  unusedSCCBrokerURIList.forEach((clientURI) => {
-    var unusedClientPool = this.sccBrokerClientPools[clientURI];
+  unusedAGCBrokerURIList.forEach((clientURI) => {
+    var unusedClientPool = this.agcBrokerClientPools[clientURI];
     unusedClientPool.destroy();
-    delete this.sccBrokerClientPools[clientURI];
+    delete this.agcBrokerClientPools[clientURI];
   });
 
   var newSubscriptionsMap = {};
   fullSubscriptionList.forEach((channelName) => {
-    var targetSCCBrokerURI = this.mapChannelNameToBrokerURI(channelName);
-    if (!newSubscriptionsMap[targetSCCBrokerURI]) {
-      newSubscriptionsMap[targetSCCBrokerURI] = {};
+    var targetAGCBrokerURI = this.mapChannelNameToBrokerURI(channelName);
+    if (!newSubscriptionsMap[targetAGCBrokerURI]) {
+      newSubscriptionsMap[targetAGCBrokerURI] = {};
     }
-    if (!newSubscriptionsMap[targetSCCBrokerURI][channelName]) {
-      newSubscriptionsMap[targetSCCBrokerURI][channelName] = true;
+    if (!newSubscriptionsMap[targetAGCBrokerURI][channelName]) {
+      newSubscriptionsMap[targetAGCBrokerURI][channelName] = true;
     }
   });
 
-  Object.keys(this.sccBrokerClientPools).forEach((clientURI) => {
-    var targetClientPool = this.sccBrokerClientPools[clientURI];
+  Object.keys(this.agcBrokerClientPools).forEach((clientURI) => {
+    var targetClientPool = this.agcBrokerClientPools[clientURI];
     var newChannelLookup = newSubscriptionsMap[clientURI] || {};
 
     var existingChannelList = targetClientPool.subscriptions(true);
@@ -128,8 +128,8 @@ ClusterBrokerClient.prototype.setBrokers = function (sccBrokerURIList) {
 ClusterBrokerClient.prototype.getAllSubscriptions = function () {
   var channelLookup = {};
 
-  Object.keys(this.sccBrokerClientPools).forEach((clientURI) => {
-    var clientPool = this.sccBrokerClientPools[clientURI];
+  Object.keys(this.agcBrokerClientPools).forEach((clientURI) => {
+    var clientPool = this.agcBrokerClientPools[clientURI];
     var subs = clientPool.subscriptions(true);
     subs.forEach((channelName) => {
       if (!channelLookup[channelName]) {
@@ -155,10 +155,10 @@ ClusterBrokerClient.prototype._subscribeClientPoolToChannelAndWatch = function (
 };
 
 ClusterBrokerClient.prototype.subscribe = function (channelName) {
-  var targetSCCBrokerURI = this.mapChannelNameToBrokerURI(channelName);
-  var targetSCCBrokerClientPool = this.sccBrokerClientPools[targetSCCBrokerURI];
-  if (targetSCCBrokerClientPool) {
-    this._subscribeClientPoolToChannelAndWatch(targetSCCBrokerClientPool, channelName);
+  var targetAGCBrokerURI = this.mapChannelNameToBrokerURI(channelName);
+  var targetAGCBrokerClientPool = this.agcBrokerClientPools[targetAGCBrokerURI];
+  if (targetAGCBrokerClientPool) {
+    this._subscribeClientPoolToChannelAndWatch(targetAGCBrokerClientPool, channelName);
   } else {
     var err = this.errors.NoMatchingSubscribeTargetError(channelName);
     this.emit('error', err);
@@ -166,10 +166,10 @@ ClusterBrokerClient.prototype.subscribe = function (channelName) {
 };
 
 ClusterBrokerClient.prototype.unsubscribe = function (channelName) {
-  var targetSCCBrokerURI = this.mapChannelNameToBrokerURI(channelName);
-  var targetSCCBrokerClientPool = this.sccBrokerClientPools[targetSCCBrokerURI];
-  if (targetSCCBrokerClientPool) {
-    targetSCCBrokerClientPool.destroyChannel(channelName);
+  var targetAGCBrokerURI = this.mapChannelNameToBrokerURI(channelName);
+  var targetAGCBrokerClientPool = this.agcBrokerClientPools[targetAGCBrokerURI];
+  if (targetAGCBrokerClientPool) {
+    targetAGCBrokerClientPool.destroyChannel(channelName);
   } else {
     var err = this.errors.NoMatchingUnsubscribeTargetError(channelName);
     this.emit('error', err);
@@ -177,10 +177,10 @@ ClusterBrokerClient.prototype.unsubscribe = function (channelName) {
 };
 
 ClusterBrokerClient.prototype.publish = function (channelName, data) {
-  var targetSCCBrokerURI = this.mapChannelNameToBrokerURI(channelName);
-  var targetSCCBrokerClientPool = this.sccBrokerClientPools[targetSCCBrokerURI];
-  if (targetSCCBrokerClientPool) {
-    targetSCCBrokerClientPool.publish(channelName, data);
+  var targetAGCBrokerURI = this.mapChannelNameToBrokerURI(channelName);
+  var targetAGCBrokerClientPool = this.agcBrokerClientPools[targetAGCBrokerURI];
+  if (targetAGCBrokerClientPool) {
+    targetAGCBrokerClientPool.publish(channelName, data);
   } else {
     var err = this.errors.NoMatchingPublishTargetError(channelName);
     this.emit('error', err);
