@@ -1,5 +1,5 @@
 const url = require('url');
-const agClient = require('asyngular-client');
+const asyngularClient = require('asyngular-client');
 const AsyncStreamEmitter = require('async-stream-emitter');
 const Hasher = require('./hasher');
 
@@ -47,7 +47,7 @@ function ClientPool(options) {
   for (let i = 0; i < this.clientCount; i++) {
     let connectOptions = Object.assign({}, clientConnectOptions);
     connectOptions.query.poolIndex = i;
-    let client = agClient.create(connectOptions);
+    let client = asyngularClient.create(connectOptions);
     client.poolIndex = i;
     (async () => {
       for await (let event of client.listener('error')) {

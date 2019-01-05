@@ -1,4 +1,4 @@
-const agClient = require('asyngular-client');
+const asyngularClient = require('asyngular-client');
 const ClusterBrokerClient = require('./cluster-broker-client');
 const packageVersion = require('./package.json').version;
 
@@ -8,7 +8,6 @@ const DEFAULT_STATE_SERVER_CONNECT_TIMEOUT = 3000;
 const DEFAULT_STATE_SERVER_ACK_TIMEOUT = 2000;
 
 const DEFAULT_RECONNECT_RANDOMNESS = 1000;
-
 
 module.exports.attach = function (broker, options) {
   let reconnectRandomness = options.stateServerReconnectRandomness || DEFAULT_RECONNECT_RANDOMNESS;
@@ -47,7 +46,7 @@ module.exports.attach = function (broker, options) {
       version: packageVersion
     }
   };
-  let stateSocket = agClient.create(scStateSocketOptions);
+  let stateSocket = asyngularClient.create(scStateSocketOptions);
   (async () => {
     for await (let event of stateSocket.listener('error')) {
       clusterClient.emit('error', event);
