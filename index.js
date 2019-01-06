@@ -126,13 +126,13 @@ module.exports.attach = function (broker, options) {
 
   (async () => {
     for await (let {channel} of broker.listener('subscribe')) {
-      clusterClient.subscribe(channelName);
+      clusterClient.subscribe(channel);
     }
   })();
 
   (async () => {
     for await (let {channel} of broker.listener('unsubscribe')) {
-      clusterClient.unsubscribe(channelName);
+      clusterClient.unsubscribe(channel);
     }
   })();
 
