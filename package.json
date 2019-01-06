@@ -9,7 +9,7 @@
   },
   "dependencies": {
     "async-stream-emitter": "^1.1.0",
-    "asyngular-client": "^1.1.0",
+    "asyngular-client": "^1.1.1",
     "skeleton-rendezvous": "^1.1.1"
   },
   "devDependencies": {

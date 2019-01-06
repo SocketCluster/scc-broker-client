@@ -87,16 +87,15 @@ module.exports.attach = function (broker, options) {
   })();
 
   let agcWorkerStateData = {
-    instanceId: options.instanceId
+    instanceId: options.instanceId,
+    instanceIp: options.instanceIp,
+    instanceIpFamily: options.instanceIpFamily || 'IPv4'
   };
-
-  agcWorkerStateData.instanceIp = options.instanceIp;
-  agcWorkerStateData.instanceIpFamily = options.instanceIpFamily || 'IPv4';
 
   let emitAGCWorkerJoinCluster = async () => {
     let data;
     try {
-      data = await stateSocket.invoke('agcWorkerJoinCluster');
+      data = await stateSocket.invoke('agcWorkerJoinCluster', agcWorkerStateData);
     } catch (error) {
       stateSocket.emit('error', {error});
       setTimeout(emitAGCWorkerJoinCluster, retryDelay);
