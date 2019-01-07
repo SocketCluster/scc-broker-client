@@ -58,18 +58,18 @@ ClusterBrokerClient.prototype.setBrokers = function (agcBrokerURIList) {
   let fullSubscriptionList = this.getAllSubscriptions();
 
   this.agcBrokerURIList.forEach((clientURI) => {
-    let clientPool;
-    let previousClientPool = this.agcBrokerClientPools[clientURI];
-    if (previousClientPool) {
-      previousClientPool.closeAllListeners();
-      clientPool = previousClientPool;
-    } else {
-      clientPool = new ClientPool({
-        clientCount: this.clientPoolSize,
-        targetURI: clientURI,
-        authKey: this.authKey
-      });
+    if (this.agcBrokerClientPools[clientURI]) {
+      brokerClientMap[clientURI] = this.agcBrokerClientPools[clientURI];
+      return;
     }
+
+    let clientPool = new ClientPool({
+      clientCount: this.clientPoolSize,
+      targetURI: clientURI,
+      authKey: this.authKey
+    });
+    brokerClientMap[clientURI] = clientPool;
+    this.agcBrokerClientPools[clientURI] = clientPool;
 
     (async () => {
       for await (let event of clientPool.listener('error')) {
@@ -96,9 +96,6 @@ ClusterBrokerClient.prototype.setBrokers = function (agcBrokerURIList) {
         this.emit('publishFail', event);
       }
     })();
-
-    brokerClientMap[clientURI] = clientPool;
-    this.agcBrokerClientPools[clientURI] = clientPool;
   });
 
   let unusedAGCBrokerURIList = Object.keys(this.agcBrokerClientPools).filter((clientURI) => {
