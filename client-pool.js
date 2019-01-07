@@ -14,8 +14,6 @@ function ClientPool(options) {
   this.targetURI = options.targetURI;
   this.authKey = options.authKey;
 
-  this.areClientListenersBound = false;
-
   let clientConnectOptions = this.breakDownURI(this.targetURI);
   clientConnectOptions.query = {
     authKey: this.authKey
@@ -56,12 +54,13 @@ function ClientPool(options) {
     })();
     this.clients.push(client);
   }
+
+  this._bindClientListeners();
 }
 
 ClientPool.prototype = Object.create(AsyncStreamEmitter.prototype);
 
-ClientPool.prototype.bindClientListeners = function () {
-  this.unbindClientListeners();
+ClientPool.prototype._bindClientListeners = function () {
   this.clients.forEach((client) => {
     (async () => {
       for await (let event of client.listener('error')) {
@@ -79,16 +78,14 @@ ClientPool.prototype.bindClientListeners = function () {
       }
     })();
   });
-  this.areClientListenersBound = true;
 };
 
-ClientPool.prototype.unbindClientListeners = function () {
+ClientPool.prototype._unbindClientListeners = function () {
   this.clients.forEach((client) => {
     client.closeListener('error');
     client.closeListener('subscribe');
     client.closeListener('subscribeFail');
   });
-  this.areClientListenersBound = false;
 };
 
 ClientPool.prototype.breakDownURI = function (uri) {
@@ -109,31 +106,25 @@ ClientPool.prototype.selectClient = function (key) {
   return this.clients[targetIndex];
 };
 
-ClientPool.prototype.publish = function (channelName, data) {
+ClientPool.prototype.publish = async function (channelName, data) {
   let targetClient = this.selectClient(channelName);
-  if (this.areClientListenersBound) {
-    return targetClient.publish(channelName, data, (err) => {
-      if (!this.areClientListenersBound) {
-        return;
-      }
-      if (err) {
-        this.emit('publishFail', {
-          targetURI: this.targetURI,
-          poolIndex: targetClient.poolIndex,
-          channel: channelName,
-          data
-        });
-        return;
-      }
-      this.emit('publish', {
-        targetURI: this.targetURI,
-        poolIndex: targetClient.poolIndex,
-        channel: channelName,
-        data
-      });
+  try {
+    await targetClient.publish(channelName, data);
+  } catch (error) {
+    this.emit('publishFail', {
+      targetURI: this.targetURI,
+      poolIndex: targetClient.poolIndex,
+      channel: channelName,
+      error
     });
+    return;
   }
-  return targetClient.publish(channelName, data);
+  this.emit('publish', {
+    targetURI: this.targetURI,
+    poolIndex: targetClient.poolIndex,
+    channel: channelName,
+    data
+  });
 };
 
 ClientPool.prototype.subscriptions = function (includePending) {
@@ -159,8 +150,12 @@ ClientPool.prototype.closeChannel = function (channelName) {
 
 ClientPool.prototype.destroy = function () {
   this.clients.forEach((client) => {
+    client.subscriptions(true).forEach((channelName) => {
+      client.closeChannel(channelName);
+    });
     client.disconnect();
   });
+  this._unbindClientListeners();
 };
 
 module.exports = ClientPool;
