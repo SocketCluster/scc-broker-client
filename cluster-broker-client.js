@@ -163,9 +163,10 @@ ClusterBrokerClient.prototype._handleChannelMessage = function (channelName, pac
 };
 
 ClusterBrokerClient.prototype._subscribeClientPoolToChannelAndWatch = function (clientPool, channelName) {
-  clientPool.closeChannel(channelName);
+  if (clientPool.isSubscribed(channelName, true)) {
+    return;
+  }
   let channel = clientPool.subscribe(channelName);
-
   (async () => {
     for await (let data of channel) {
       this._handleChannelMessage(channelName, data);
@@ -188,6 +189,7 @@ ClusterBrokerClient.prototype.unsubscribe = function (channelName) {
   let targetAGCBrokerURI = this.mapChannelNameToBrokerURI(channelName);
   let targetAGCBrokerClientPool = this.agcBrokerClientPools[targetAGCBrokerURI];
   if (targetAGCBrokerClientPool) {
+    targetAGCBrokerClientPool.unsubscribe(channelName);
     targetAGCBrokerClientPool.closeChannel(channelName);
   } else {
     let error = this.errors.NoMatchingUnsubscribeTargetError(channelName);

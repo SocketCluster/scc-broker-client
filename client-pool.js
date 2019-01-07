@@ -138,6 +138,16 @@ ClientPool.prototype.subscriptions = function (includePending) {
   return subscriptionList;
 };
 
+ClientPool.prototype.isSubscribed = function (channelName, includePending) {
+  let targetClient = this.selectClient(channelName);
+  return targetClient.isSubscribed(channelName, includePending);
+};
+
+ClientPool.prototype.unsubscribe = function (channelName) {
+  let targetClient = this.selectClient(channelName);
+  return targetClient.unsubscribe(channelName);
+};
+
 ClientPool.prototype.subscribe = function (channelName) {
   let targetClient = this.selectClient(channelName);
   return targetClient.subscribe(channelName);
