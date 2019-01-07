@@ -18,13 +18,6 @@ module.exports.attach = function (broker, options) {
     mappingEngine: options.mappingEngine,
     clientPoolSize: options.clientPoolSize,
   });
-  if (!options.noErrorLogging) {
-    (async () => {
-      for await (let {error} of clusterClient.listener('error')) {
-        console.error(error);
-      }
-    })();
-  }
 
   let retryDelay = options.brokerRetryDelay || DEFAULT_RETRY_DELAY;
 
@@ -68,9 +61,10 @@ module.exports.attach = function (broker, options) {
   };
 
   let updateBrokerMapping = (req) => {
-    let updated = isNewSnapshot(req.data);
+    let data = req.data || {};
+    let updated = isNewSnapshot(data);
     if (updated) {
-      clusterClient.setBrokers(req.data.agcBrokerURIs);
+      clusterClient.setBrokers(data.agcBrokerURIs);
     }
     req.end();
   };
@@ -114,7 +108,7 @@ module.exports.attach = function (broker, options) {
   let clusterMessageHandler = (channelName, packet) => {
     if ((packet.sender == null || packet.sender !== options.instanceId) && packet.messages && packet.messages.length) {
       packet.messages.forEach((data) => {
-        broker.publish(channelName, data);
+        broker.publish(channelName, data, true);
       });
     }
   };
