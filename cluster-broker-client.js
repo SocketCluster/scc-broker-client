@@ -125,7 +125,7 @@ ClusterBrokerClient.prototype.setBrokers = function (agcBrokerURIList) {
     let existingChannelList = targetClientPool.subscriptions(true);
     existingChannelList.forEach((channelName) => {
       if (!newChannelLookup[channelName]) {
-        targetClientPool.destroyChannel(channelName);
+        targetClientPool.closeChannel(channelName);
       }
     });
 
@@ -163,9 +163,14 @@ ClusterBrokerClient.prototype._handleChannelMessage = function (channelName, pac
 };
 
 ClusterBrokerClient.prototype._subscribeClientPoolToChannelAndWatch = function (clientPool, channelName) {
-  clientPool.subscribeAndWatch(channelName, (data) => {
-    this._handleChannelMessage(channelName, data);
-  });
+  clientPool.closeChannel(channelName);
+  let channel = clientPool.subscribe(channelName);
+
+  (async () => {
+    for await (let data of channel) {
+      this._handleChannelMessage(channelName, data);
+    }
+  })();
 };
 
 ClusterBrokerClient.prototype.subscribe = function (channelName) {
@@ -183,7 +188,7 @@ ClusterBrokerClient.prototype.unsubscribe = function (channelName) {
   let targetAGCBrokerURI = this.mapChannelNameToBrokerURI(channelName);
   let targetAGCBrokerClientPool = this.agcBrokerClientPools[targetAGCBrokerURI];
   if (targetAGCBrokerClientPool) {
-    targetAGCBrokerClientPool.destroyChannel(channelName);
+    targetAGCBrokerClientPool.closeChannel(channelName);
   } else {
     let error = this.errors.NoMatchingUnsubscribeTargetError(channelName);
     this.emit('error', {error});

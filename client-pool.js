@@ -147,24 +147,19 @@ ClientPool.prototype.subscriptions = function (includePending) {
   return subscriptionList;
 };
 
-ClientPool.prototype.subscribeAndWatch = function (channelName, handler) {
+ClientPool.prototype.subscribe = function (channelName) {
   let targetClient = this.selectClient(channelName);
-  targetClient.subscribe(channelName);
-  if (!targetClient.watchers(channelName).length) {
-    targetClient.watch(channelName, (data) => {
-      handler(data);
-    });
-  }
+  return targetClient.subscribe(channelName);
 };
 
-ClientPool.prototype.destroyChannel = function (channelName) {
+ClientPool.prototype.closeChannel = function (channelName) {
   let targetClient = this.selectClient(channelName);
-  return targetClient.destroyChannel(channelName);
+  targetClient.closeChannel(channelName);
 };
 
 ClientPool.prototype.destroy = function () {
   this.clients.forEach((client) => {
-    client.destroy();
+    client.disconnect();
   });
 };
 

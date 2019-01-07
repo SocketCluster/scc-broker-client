@@ -140,12 +140,16 @@ module.exports.attach = function (broker, options) {
   let publishTimeout = null;
 
   let flushPublishOutboundBuffer = () => {
-    Object.keys(publishOutboundBuffer).forEach((channelName) => {
+    Object.keys(publishOutboundBuffer).forEach(async (channelName) => {
       let packet = {
         sender: options.instanceId || null,
         messages: publishOutboundBuffer[channelName],
       };
-      clusterClient.publish(channelName, packet);
+      try {
+        await clusterClient.publish(channelName, packet);
+      } catch (error) {
+        clusterClient.emit('error', {error});
+      }
     });
 
     publishOutboundBuffer = {};
@@ -159,7 +163,13 @@ module.exports.attach = function (broker, options) {
           sender: options.instanceId || null,
           messages: [data],
         };
-        clusterClient.publish(channel, packet);
+        (async () => {
+          try {
+            await clusterClient.publish(channel, packet);
+          } catch (error) {
+            clusterClient.emit('error', {error});
+          }
+        })();
       } else {
         if (!publishOutboundBuffer[channel]) {
           publishOutboundBuffer[channel] = [];
