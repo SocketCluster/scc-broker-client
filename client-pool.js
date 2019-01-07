@@ -160,10 +160,11 @@ ClientPool.prototype.closeChannel = function (channelName) {
 
 ClientPool.prototype.destroy = function () {
   this.clients.forEach((client) => {
+    client.disconnect();
     client.subscriptions(true).forEach((channelName) => {
+      client.unsubscribe(channelName);
       client.closeChannel(channelName);
     });
-    client.disconnect();
   });
   this._unbindClientListeners();
 };
