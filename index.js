@@ -108,7 +108,7 @@ module.exports.attach = function (broker, options) {
   let clusterMessageHandler = (channelName, packet) => {
     if ((packet.sender == null || packet.sender !== options.instanceId) && packet.messages && packet.messages.length) {
       packet.messages.forEach((data) => {
-        broker.publish(channelName, data, true);
+        broker.invokePublish(channelName, data, true);
       });
     }
   };
@@ -140,7 +140,7 @@ module.exports.attach = function (broker, options) {
         messages: publishOutboundBuffer[channelName],
       };
       try {
-        await clusterClient.publish(channelName, packet);
+        await clusterClient.invokePublish(channelName, packet);
       } catch (error) {
         clusterClient.emit('error', {error});
       }
@@ -159,7 +159,7 @@ module.exports.attach = function (broker, options) {
         };
         (async () => {
           try {
-            await clusterClient.publish(channel, packet);
+            await clusterClient.invokePublish(channel, packet);
           } catch (error) {
             clusterClient.emit('error', {error});
           }

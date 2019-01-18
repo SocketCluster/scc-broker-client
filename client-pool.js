@@ -106,10 +106,10 @@ ClientPool.prototype.selectClient = function (key) {
   return this.clients[targetIndex];
 };
 
-ClientPool.prototype.publish = async function (channelName, data) {
+ClientPool.prototype.invokePublish = async function (channelName, data) {
   let targetClient = this.selectClient(channelName);
   try {
-    await targetClient.publish(channelName, data);
+    await targetClient.invokePublish(channelName, data);
   } catch (error) {
     this.emit('publishFail', {
       targetURI: this.targetURI,

@@ -197,11 +197,11 @@ ClusterBrokerClient.prototype.unsubscribe = function (channelName) {
   }
 };
 
-ClusterBrokerClient.prototype.publish = function (channelName, data) {
+ClusterBrokerClient.prototype.invokePublish = function (channelName, data) {
   let targetAGCBrokerURI = this.mapChannelNameToBrokerURI(channelName);
   let targetAGCBrokerClientPool = this.agcBrokerClientPools[targetAGCBrokerURI];
   if (targetAGCBrokerClientPool) {
-    targetAGCBrokerClientPool.publish(channelName, data);
+    targetAGCBrokerClientPool.invokePublish(channelName, data);
   } else {
     let error = this.errors.NoMatchingPublishTargetError(channelName);
     this.emit('error', {error});
