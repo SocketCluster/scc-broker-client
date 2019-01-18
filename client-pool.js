@@ -22,16 +22,14 @@ function ClientPool(options) {
   this._handleClientError = (event) => {
     this.emit('error', event);
   };
-  this._handleClientSubscribe = (channelName) => {
-    let client = this;
+  this._handleClientSubscribe = (client, channelName) => {
     this.emit('subscribe', {
       targetURI: this.targetURI,
       poolIndex: client.poolIndex,
       channel: channelName
     });
   };
-  this._handleClientSubscribeFail = (error, channelName) => {
-    let client = this;
+  this._handleClientSubscribeFail = (client, error, channelName) => {
     this.emit('subscribeFail', {
       targetURI: this.targetURI,
       poolIndex: client.poolIndex,
@@ -69,12 +67,12 @@ ClientPool.prototype._bindClientListeners = function () {
     })();
     (async () => {
       for await (let {channel} of client.listener('subscribe')) {
-        this._handleClientSubscribe(channel);
+        this._handleClientSubscribe(client, channel);
       }
     })();
     (async () => {
       for await (let {error, channel} of client.listener('subscribeFail')) {
-        this._handleClientSubscribeFail(error, channel);
+        this._handleClientSubscribeFail(client, error, channel);
       }
     })();
   });
