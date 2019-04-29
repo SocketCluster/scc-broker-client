@@ -134,6 +134,8 @@ ClusterBrokerClient.prototype.setBrokers = function (agcBrokerURIList) {
       this._subscribeClientPoolToChannelAndWatch(targetClientPool, channelName);
     });
   });
+
+  this.emit('updateBrokers', {brokerURIs: agcBrokerURIList});
 };
 
 ClusterBrokerClient.prototype.getAllSubscriptions = function () {

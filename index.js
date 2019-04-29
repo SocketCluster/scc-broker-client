@@ -46,25 +46,52 @@ module.exports.attach = function (broker, options) {
     }
   })();
 
-  let latestSnapshotTime = -1;
+  let latestBrokersSnapshotTime = -1;
 
-  let isNewSnapshot = (updatePacket) => {
-    if (updatePacket.time > latestSnapshotTime) {
-      latestSnapshotTime = updatePacket.time;
+  let isNewBrokersSnapshot = (updatePacket) => {
+    if (updatePacket.time > latestBrokersSnapshotTime) {
+      latestBrokersSnapshotTime = updatePacket.time;
       return true;
     }
     return false;
   };
 
-  let resetSnapshotTime = () => {
-    latestSnapshotTime = -1;
+  let resetBrokersSnapshotTime = () => {
+    latestBrokersSnapshotTime = -1;
   };
 
   let updateBrokerMapping = (req) => {
     let data = req.data || {};
-    let updated = isNewSnapshot(data);
+    let updated = isNewBrokersSnapshot(data);
     if (updated) {
       clusterClient.setBrokers(data.agcBrokerURIs);
+    }
+    req.end();
+  };
+
+  let latestWorkersSnapshotTime = -1;
+
+  let isNewWorkersSnapshot = (updatePacket) => {
+    if (updatePacket.time > latestWorkersSnapshotTime) {
+      latestWorkersSnapshotTime = updatePacket.time;
+      return true;
+    }
+    return false;
+  };
+
+  let resetWorkersSnapshotTime = () => {
+    latestWorkersSnapshotTime = -1;
+  };
+
+  let triggerUpdateWorkers = (workerURIs) => {
+    clusterClient.emit('updateWorkers', {workerURIs});
+  };
+
+  let updateWorkerMapping = (req) => {
+    let data = req.data || {};
+    let updated = isNewWorkersSnapshot(data);
+    if (updated) {
+      triggerUpdateWorkers(data.agcWorkerURIs);
     }
     req.end();
   };
@@ -77,6 +104,16 @@ module.exports.attach = function (broker, options) {
   (async () => {
     for await (let req of stateSocket.procedure('agcBrokerLeaveCluster')) {
       updateBrokerMapping(req);
+    }
+  })();
+  (async () => {
+    for await (let req of stateSocket.procedure('agcWorkerJoinCluster')) {
+      updateWorkerMapping(req);
+    }
+  })();
+  (async () => {
+    for await (let req of stateSocket.procedure('agcWorkerLeaveCluster')) {
+      updateWorkerMapping(req);
     }
   })();
 
@@ -95,8 +132,10 @@ module.exports.attach = function (broker, options) {
       setTimeout(emitAGCWorkerJoinCluster, retryDelay);
       return;
     }
-    resetSnapshotTime();
+    resetBrokersSnapshotTime();
+    resetWorkersSnapshotTime();
     clusterClient.setBrokers(data.agcBrokerURIs);
+    triggerUpdateWorkers(data.agcWorkerURIs);
   };
 
   (async () => {
