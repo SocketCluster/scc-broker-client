@@ -83,15 +83,18 @@ module.exports.attach = function (broker, options) {
     latestWorkersSnapshotTime = -1;
   };
 
-  let triggerUpdateWorkers = (workerURIs) => {
-    clusterClient.emit('updateWorkers', {workerURIs});
+  let triggerUpdateWorkers = (data) => {
+    clusterClient.emit('updateWorkers', {
+      workerURIs: data.agcWorkerURIs,
+      sourceWorkerURI: data.agcSourceWorkerURI
+    });
   };
 
   let updateWorkerMapping = (req) => {
     let data = req.data || {};
     let updated = isNewWorkersSnapshot(data);
     if (updated) {
-      triggerUpdateWorkers(data.agcWorkerURIs);
+      triggerUpdateWorkers(data);
     }
     req.end();
   };
@@ -135,7 +138,7 @@ module.exports.attach = function (broker, options) {
     resetBrokersSnapshotTime();
     resetWorkersSnapshotTime();
     clusterClient.setBrokers(data.agcBrokerURIs);
-    triggerUpdateWorkers(data.agcWorkerURIs);
+    triggerUpdateWorkers(data);
   };
 
   (async () => {
