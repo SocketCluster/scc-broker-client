@@ -13,6 +13,7 @@ function ClusterBrokerClient(broker, options) {
   this.authKey = options.authKey || null;
   this.mappingEngine = options.mappingEngine || 'skeletonRendezvous';
   this.clientPoolSize = options.clientPoolSize || 1;
+  this.isReady = false;
 
   if (this.mappingEngine === 'skeletonRendezvous') {
     this.mapper = new SkeletonRendezvousMapper(options.mappingEngineOptions);
@@ -136,6 +137,7 @@ ClusterBrokerClient.prototype.setBrokers = function (agcBrokerURIList) {
   });
 
   this.emit('updateBrokers', {brokerURIs: agcBrokerURIList});
+  this.isReady = true;
 };
 
 ClusterBrokerClient.prototype.getAllSubscriptions = function () {

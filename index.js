@@ -162,13 +162,17 @@ module.exports.attach = function (broker, options) {
 
   (async () => {
     for await (let {channel} of broker.listener('subscribe')) {
-      clusterClient.subscribe(channel);
+      if (clusterClient.isReady) {
+        clusterClient.subscribe(channel);
+      }
     }
   })();
 
   (async () => {
     for await (let {channel} of broker.listener('unsubscribe')) {
-      clusterClient.unsubscribe(channel);
+      if (clusterClient.isReady) {
+        clusterClient.unsubscribe(channel);
+      }
     }
   })();
 
