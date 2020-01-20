@@ -8,8 +8,8 @@ function ClusterBrokerClient(broker, options) {
 
   options = options || {};
   this.broker = broker;
-  this.agcBrokerClientPools = {};
-  this.agcBrokerURIList = [];
+  this.sccBrokerClientPools = {};
+  this.sccBrokerURIList = [];
   this.authKey = options.authKey || null;
   this.mappingEngine = options.mappingEngine || 'skeletonRendezvous';
   this.clientPoolSize = options.clientPoolSize || 1;
@@ -31,17 +31,17 @@ ClusterBrokerClient.prototype = Object.create(AsyncStreamEmitter.prototype);
 
 ClusterBrokerClient.prototype.errors = {
   NoMatchingSubscribeTargetError: function (channelName) {
-    let err = new Error(`Could not find a matching subscribe target agc-broker for the ${channelName} channel - The agc-broker may be down`);
+    let err = new Error(`Could not find a matching subscribe target scc-broker for the ${channelName} channel - The scc-broker may be down`);
     err.name = 'NoMatchingSubscribeTargetError';
     return err;
   },
   NoMatchingUnsubscribeTargetError: function (channelName) {
-    let err = new Error(`Could not find a matching unsubscribe target agc-broker for the ${channelName} channel - The agc-broker may be down`);
+    let err = new Error(`Could not find a matching unsubscribe target scc-broker for the ${channelName} channel - The scc-broker may be down`);
     err.name = 'NoMatchingUnsubscribeTargetError';
     return err;
   },
   NoMatchingPublishTargetError: function (channelName) {
-    let err = new Error(`Could not find a matching publish target agc-broker for the ${channelName} channel - The agc-broker may be down`);
+    let err = new Error(`Could not find a matching publish target scc-broker for the ${channelName} channel - The scc-broker may be down`);
     err.name = 'NoMatchingPublishTargetError';
     return err;
   }
@@ -51,16 +51,16 @@ ClusterBrokerClient.prototype.mapChannelNameToBrokerURI = function (channelName)
   return this.mapper.findSite(channelName);
 };
 
-ClusterBrokerClient.prototype.setBrokers = function (agcBrokerURIList) {
-  this.agcBrokerURIList = agcBrokerURIList.concat();
-  this.mapper.setSites(this.agcBrokerURIList);
+ClusterBrokerClient.prototype.setBrokers = function (sccBrokerURIList) {
+  this.sccBrokerURIList = sccBrokerURIList.concat();
+  this.mapper.setSites(this.sccBrokerURIList);
 
   let brokerClientMap = {};
   let fullSubscriptionList = this.getAllSubscriptions();
 
-  this.agcBrokerURIList.forEach((clientURI) => {
-    if (this.agcBrokerClientPools[clientURI]) {
-      brokerClientMap[clientURI] = this.agcBrokerClientPools[clientURI];
+  this.sccBrokerURIList.forEach((clientURI) => {
+    if (this.sccBrokerClientPools[clientURI]) {
+      brokerClientMap[clientURI] = this.sccBrokerClientPools[clientURI];
       return;
     }
 
@@ -70,7 +70,7 @@ ClusterBrokerClient.prototype.setBrokers = function (agcBrokerURIList) {
       authKey: this.authKey
     });
     brokerClientMap[clientURI] = clientPool;
-    this.agcBrokerClientPools[clientURI] = clientPool;
+    this.sccBrokerClientPools[clientURI] = clientPool;
 
     (async () => {
       for await (let event of clientPool.listener('error')) {
@@ -99,28 +99,28 @@ ClusterBrokerClient.prototype.setBrokers = function (agcBrokerURIList) {
     })();
   });
 
-  let unusedAGCBrokerURIList = Object.keys(this.agcBrokerClientPools).filter((clientURI) => {
+  let unusedsccBrokerURIList = Object.keys(this.sccBrokerClientPools).filter((clientURI) => {
     return !brokerClientMap[clientURI];
   });
-  unusedAGCBrokerURIList.forEach((clientURI) => {
-    let unusedClientPool = this.agcBrokerClientPools[clientURI];
+  unusedsccBrokerURIList.forEach((clientURI) => {
+    let unusedClientPool = this.sccBrokerClientPools[clientURI];
     unusedClientPool.destroy();
-    delete this.agcBrokerClientPools[clientURI];
+    delete this.sccBrokerClientPools[clientURI];
   });
 
   let newSubscriptionsMap = {};
   fullSubscriptionList.forEach((channelName) => {
-    let targetAGCBrokerURI = this.mapChannelNameToBrokerURI(channelName);
-    if (!newSubscriptionsMap[targetAGCBrokerURI]) {
-      newSubscriptionsMap[targetAGCBrokerURI] = {};
+    let targetsccBrokerURI = this.mapChannelNameToBrokerURI(channelName);
+    if (!newSubscriptionsMap[targetsccBrokerURI]) {
+      newSubscriptionsMap[targetsccBrokerURI] = {};
     }
-    if (!newSubscriptionsMap[targetAGCBrokerURI][channelName]) {
-      newSubscriptionsMap[targetAGCBrokerURI][channelName] = true;
+    if (!newSubscriptionsMap[targetsccBrokerURI][channelName]) {
+      newSubscriptionsMap[targetsccBrokerURI][channelName] = true;
     }
   });
 
-  Object.keys(this.agcBrokerClientPools).forEach((clientURI) => {
-    let targetClientPool = this.agcBrokerClientPools[clientURI];
+  Object.keys(this.sccBrokerClientPools).forEach((clientURI) => {
+    let targetClientPool = this.sccBrokerClientPools[clientURI];
     let newChannelLookup = newSubscriptionsMap[clientURI] || {};
 
     let existingChannelList = targetClientPool.subscriptions(true);
@@ -136,15 +136,15 @@ ClusterBrokerClient.prototype.setBrokers = function (agcBrokerURIList) {
     });
   });
 
-  this.emit('updateBrokers', {brokerURIs: agcBrokerURIList});
+  this.emit('updateBrokers', {brokerURIs: sccBrokerURIList});
   this.isReady = true;
 };
 
 ClusterBrokerClient.prototype.getAllSubscriptions = function () {
   let channelLookup = {};
 
-  Object.keys(this.agcBrokerClientPools).forEach((clientURI) => {
-    let clientPool = this.agcBrokerClientPools[clientURI];
+  Object.keys(this.sccBrokerClientPools).forEach((clientURI) => {
+    let clientPool = this.sccBrokerClientPools[clientURI];
     let subs = clientPool.subscriptions(true);
     subs.forEach((channelName) => {
       if (!channelLookup[channelName]) {
@@ -179,10 +179,10 @@ ClusterBrokerClient.prototype._subscribeClientPoolToChannelAndWatch = function (
 };
 
 ClusterBrokerClient.prototype.subscribe = function (channelName) {
-  let targetAGCBrokerURI = this.mapChannelNameToBrokerURI(channelName);
-  let targetAGCBrokerClientPool = this.agcBrokerClientPools[targetAGCBrokerURI];
-  if (targetAGCBrokerClientPool) {
-    this._subscribeClientPoolToChannelAndWatch(targetAGCBrokerClientPool, channelName);
+  let targetsccBrokerURI = this.mapChannelNameToBrokerURI(channelName);
+  let targetsccBrokerClientPool = this.sccBrokerClientPools[targetsccBrokerURI];
+  if (targetsccBrokerClientPool) {
+    this._subscribeClientPoolToChannelAndWatch(targetsccBrokerClientPool, channelName);
   } else {
     let error = this.errors.NoMatchingSubscribeTargetError(channelName);
     this.emit('error', {error});
@@ -190,11 +190,11 @@ ClusterBrokerClient.prototype.subscribe = function (channelName) {
 };
 
 ClusterBrokerClient.prototype.unsubscribe = function (channelName) {
-  let targetAGCBrokerURI = this.mapChannelNameToBrokerURI(channelName);
-  let targetAGCBrokerClientPool = this.agcBrokerClientPools[targetAGCBrokerURI];
-  if (targetAGCBrokerClientPool) {
-    targetAGCBrokerClientPool.unsubscribe(channelName);
-    targetAGCBrokerClientPool.closeChannel(channelName);
+  let targetsccBrokerURI = this.mapChannelNameToBrokerURI(channelName);
+  let targetsccBrokerClientPool = this.sccBrokerClientPools[targetsccBrokerURI];
+  if (targetsccBrokerClientPool) {
+    targetsccBrokerClientPool.unsubscribe(channelName);
+    targetsccBrokerClientPool.closeChannel(channelName);
   } else {
     let error = this.errors.NoMatchingUnsubscribeTargetError(channelName);
     this.emit('error', {error});
@@ -202,10 +202,10 @@ ClusterBrokerClient.prototype.unsubscribe = function (channelName) {
 };
 
 ClusterBrokerClient.prototype.invokePublish = function (channelName, data) {
-  let targetAGCBrokerURI = this.mapChannelNameToBrokerURI(channelName);
-  let targetAGCBrokerClientPool = this.agcBrokerClientPools[targetAGCBrokerURI];
-  if (targetAGCBrokerClientPool) {
-    targetAGCBrokerClientPool.invokePublish(channelName, data);
+  let targetsccBrokerURI = this.mapChannelNameToBrokerURI(channelName);
+  let targetsccBrokerClientPool = this.sccBrokerClientPools[targetsccBrokerURI];
+  if (targetsccBrokerClientPool) {
+    targetsccBrokerClientPool.invokePublish(channelName, data);
   } else {
     let error = this.errors.NoMatchingPublishTargetError(channelName);
     this.emit('error', {error});

@@ -1,25 +1,25 @@
 {
-  "name": "agc-broker-client",
-  "version": "6.1.1",
-  "description": "Client for the Asyngular cluster - For horizontal scalability.",
+  "name": "scc-broker-client",
+  "version": "7.0.0",
+  "description": "Client for SCC - For SocketCluster horizontal scalability.",
   "main": "index.js",
   "repository": {
     "type": "git",
-    "url": "https://github.com/SocketCluster/agc-broker-client.git"
+    "url": "https://github.com/SocketCluster/scc-broker-client.git"
   },
   "dependencies": {
     "async-stream-emitter": "^3.0.3",
-    "asyngular-client": "^6.2.0",
+    "socketcluster-client": "^15.0.0",
     "skeleton-rendezvous": "^1.1.1"
   },
   "devDependencies": {
     "mocha": "5.2.0"
   },
   "keywords": [
-    "asyngular",
+    "socketcluster",
     "socketcluster",
     "cluster",
-    "agc",
+    "scc",
     "client",
     "horizontal",
     "scalability"
@@ -27,7 +27,7 @@
   "author": "Jonathan Gros-Dubois",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/SocketCluster/agc-broker-client/issues"
+    "url": "https://github.com/SocketCluster/scc-broker-client/issues"
   },
-  "homepage": "https://github.com/SocketCluster/agc-broker-client"
+  "homepage": "https://github.com/SocketCluster/scc-broker-client"
 }

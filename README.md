@@ -1,2 +1,2 @@
-# agc-broker-client
-Client for the Asyngular cluster (for horizontal scalability).
+# scc-broker-client
+Client for SCC (for horizontal scalability).

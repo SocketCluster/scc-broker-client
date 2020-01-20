@@ -1,4 +1,4 @@
-const asyngularClient = require('asyngular-client');
+const socketClusterClient = require('socketcluster-client');
 const ClusterBrokerClient = require('./cluster-broker-client');
 const packageVersion = require('./package.json').version;
 
@@ -35,11 +35,11 @@ module.exports.attach = function (broker, options) {
     query: {
       authKey,
       instancePort: options.instancePort,
-      instanceType: 'agc-worker',
+      instanceType: 'scc-worker',
       version: packageVersion
     }
   };
-  let stateSocket = asyngularClient.create(scStateSocketOptions);
+  let stateSocket = socketClusterClient.create(scStateSocketOptions);
   (async () => {
     for await (let event of stateSocket.listener('error')) {
       clusterClient.emit('error', event);
@@ -64,7 +64,7 @@ module.exports.attach = function (broker, options) {
     let data = req.data || {};
     let updated = isNewBrokersSnapshot(data);
     if (updated) {
-      clusterClient.setBrokers(data.agcBrokerURIs);
+      clusterClient.setBrokers(data.sccBrokerURIs);
     }
     req.end();
   };
@@ -85,8 +85,8 @@ module.exports.attach = function (broker, options) {
 
   let triggerUpdateWorkers = (data) => {
     clusterClient.emit('updateWorkers', {
-      workerURIs: data.agcWorkerURIs,
-      sourceWorkerURI: data.agcSourceWorkerURI
+      workerURIs: data.sccWorkerURIs,
+      sourceWorkerURI: data.sccSourceWorkerURI
     });
   };
 
@@ -100,50 +100,50 @@ module.exports.attach = function (broker, options) {
   };
 
   (async () => {
-    for await (let req of stateSocket.procedure('agcBrokerJoinCluster')) {
+    for await (let req of stateSocket.procedure('sccBrokerJoinCluster')) {
       updateBrokerMapping(req);
     }
   })();
   (async () => {
-    for await (let req of stateSocket.procedure('agcBrokerLeaveCluster')) {
+    for await (let req of stateSocket.procedure('sccBrokerLeaveCluster')) {
       updateBrokerMapping(req);
     }
   })();
   (async () => {
-    for await (let req of stateSocket.procedure('agcWorkerJoinCluster')) {
+    for await (let req of stateSocket.procedure('sccWorkerJoinCluster')) {
       updateWorkerMapping(req);
     }
   })();
   (async () => {
-    for await (let req of stateSocket.procedure('agcWorkerLeaveCluster')) {
+    for await (let req of stateSocket.procedure('sccWorkerLeaveCluster')) {
       updateWorkerMapping(req);
     }
   })();
 
-  let agcWorkerStateData = {
+  let sccWorkerStateData = {
     instanceId: options.instanceId,
     instanceIp: options.instanceIp,
     instanceIpFamily: options.instanceIpFamily || 'IPv4'
   };
 
-  let emitAGCWorkerJoinCluster = async () => {
+  let emitsccWorkerJoinCluster = async () => {
     let data;
     try {
-      data = await stateSocket.invoke('agcWorkerJoinCluster', agcWorkerStateData);
+      data = await stateSocket.invoke('sccWorkerJoinCluster', sccWorkerStateData);
     } catch (error) {
       stateSocket.emit('error', {error});
-      setTimeout(emitAGCWorkerJoinCluster, retryDelay);
+      setTimeout(emitsccWorkerJoinCluster, retryDelay);
       return;
     }
     resetBrokersSnapshotTime();
     resetWorkersSnapshotTime();
-    clusterClient.setBrokers(data.agcBrokerURIs);
+    clusterClient.setBrokers(data.sccBrokerURIs);
     triggerUpdateWorkers(data);
   };
 
   (async () => {
     for await (let event of stateSocket.listener('connect')) {
-      emitAGCWorkerJoinCluster();
+      emitsccWorkerJoinCluster();
     }
   })();
 

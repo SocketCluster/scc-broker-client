@@ -1,5 +1,5 @@
 const url = require('url');
-const asyngularClient = require('asyngular-client');
+const socketClusterClient = require('socketcluster-client');
 const AsyncStreamEmitter = require('async-stream-emitter');
 const Hasher = require('./hasher');
 
@@ -43,7 +43,7 @@ function ClientPool(options) {
   for (let i = 0; i < this.clientCount; i++) {
     let connectOptions = Object.assign({}, clientConnectOptions);
     connectOptions.query.poolIndex = i;
-    let client = asyngularClient.create(connectOptions);
+    let client = socketClusterClient.create(connectOptions);
     client.poolIndex = i;
     (async () => {
       for await (let event of client.listener('error')) {
