@@ -8,9 +8,9 @@
     "url": "https://github.com/SocketCluster/scc-broker-client.git"
   },
   "dependencies": {
-    "async-stream-emitter": "^3.0.3",
-    "socketcluster-client": "^15.0.3",
-    "skeleton-rendezvous": "^1.1.1"
+    "async-stream-emitter": "^4.0.0",
+    "socketcluster-client": "^16.0.0",
+    "skeleton-rendezvous": "^1.1.2"
   },
   "devDependencies": {
     "mocha": "5.2.0"
