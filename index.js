@@ -126,13 +126,13 @@ module.exports.attach = function (broker, options) {
     instanceIpFamily: options.instanceIpFamily || 'IPv4'
   };
 
-  let emitsccWorkerJoinCluster = async () => {
+  let emitSCCWorkerJoinCluster = async () => {
     let data;
     try {
       data = await stateSocket.invoke('sccWorkerJoinCluster', sccWorkerStateData);
     } catch (error) {
       stateSocket.emit('error', {error});
-      setTimeout(emitsccWorkerJoinCluster, retryDelay);
+      setTimeout(emitSCCWorkerJoinCluster, retryDelay);
       return;
     }
     resetBrokersSnapshotTime();
@@ -143,7 +143,7 @@ module.exports.attach = function (broker, options) {
 
   (async () => {
     for await (let event of stateSocket.listener('connect')) {
-      emitsccWorkerJoinCluster();
+      emitSCCWorkerJoinCluster();
     }
   })();
 
