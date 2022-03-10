@@ -126,6 +126,7 @@ ClusterBrokerClient.prototype.setBrokers = function (sccBrokerURIList) {
     let existingChannelList = targetClientPool.subscriptions(true);
     existingChannelList.forEach((channelName) => {
       if (!newChannelLookup[channelName]) {
+        targetClientPool.unsubscribe(channelName);
         targetClientPool.closeChannel(channelName);
       }
     });
