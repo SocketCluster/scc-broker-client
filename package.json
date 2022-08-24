@@ -9,7 +9,7 @@
   },
   "dependencies": {
     "async-stream-emitter": "^4.0.0",
-    "socketcluster-client": "^16.0.0",
+    "socketcluster-client": "^17.0.1",
     "skeleton-rendezvous": "^1.1.2"
   },
   "devDependencies": {
