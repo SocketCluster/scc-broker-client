@@ -1,6 +1,6 @@
 {
   "name": "scc-broker-client",
-  "version": "8.2.0",
+  "version": "9.0.0",
   "description": "Client for SCC - For SocketCluster horizontal scalability.",
   "main": "index.js",
   "repository": {
@@ -8,12 +8,12 @@
     "url": "https://github.com/SocketCluster/scc-broker-client.git"
   },
   "dependencies": {
-    "async-stream-emitter": "^4.0.0",
-    "socketcluster-client": "^17.0.1",
-    "skeleton-rendezvous": "^1.1.2"
+    "async-stream-emitter": "^4.1.0",
+    "skeleton-rendezvous": "^1.1.2",
+    "socketcluster-client": "^17.1.1"
   },
   "devDependencies": {
-    "mocha": "5.2.0"
+    "mocha": "^10.2.0"
   },
   "keywords": [
     "socketcluster",
