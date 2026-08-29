@@ -14,6 +14,7 @@ function ClusterBrokerClient(broker, options) {
   this.mappingEngine = options.mappingEngine || 'skeletonRendezvous';
   this.clientPoolSize = options.clientPoolSize || 1;
   this.isReady = false;
+  this.codecEngine = options.codecEngine || null;
 
   if (this.mappingEngine === 'skeletonRendezvous') {
     this.mapper = new SkeletonRendezvousMapper(options.mappingEngineOptions);
@@ -67,7 +68,8 @@ ClusterBrokerClient.prototype.setBrokers = function (sccBrokerURIList) {
     let clientPool = new ClientPool({
       clientCount: this.clientPoolSize,
       targetURI: clientURI,
-      authKey: this.authKey
+      authKey: this.authKey,
+      codecEngine: this.codecEngine
     });
     brokerClientMap[clientURI] = clientPool;
     this.sccBrokerClientPools[clientURI] = clientPool;

@@ -19,6 +19,8 @@ function ClientPool(options) {
     authKey: this.authKey
   };
 
+  clientConnectOptions.codecEngine = options.codecEngine || null
+
   this._handleClientError = (event) => {
     this.emit('error', event);
   };

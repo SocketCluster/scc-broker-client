@@ -17,6 +17,7 @@ module.exports.attach = function (broker, options) {
     authKey: authKey,
     mappingEngine: options.mappingEngine,
     clientPoolSize: options.clientPoolSize,
+    codecEngine: options.codecEngine,
   });
 
   let retryDelay = options.brokerRetryDelay || DEFAULT_RETRY_DELAY;
