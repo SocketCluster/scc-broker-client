@@ -8,6 +8,8 @@ const DEFAULT_STATE_SERVER_CONNECT_TIMEOUT = 3000;
 const DEFAULT_STATE_SERVER_ACK_TIMEOUT = 2000;
 
 const DEFAULT_RECONNECT_RANDOMNESS = 1000;
+const DEFAULT_MAX_PENDING_PUBLISH_COUNT = Number(process.env.SCC_MAX_PENDING_PUBLISH_COUNT) || 1000;
+const DEFAULT_MAX_PENDING_PUBLISH_AGE = Number(process.env.SCC_MAX_PENDING_PUBLISH_AGE) || 2000;
 
 module.exports.attach = function (broker, options) {
   let reconnectRandomness = options.stateServerReconnectRandomness || DEFAULT_RECONNECT_RANDOMNESS;
@@ -196,29 +198,72 @@ module.exports.attach = function (broker, options) {
     publishTimeout = null;
   };
 
+  let publishToCluster = (channel, data) => {
+    if (options.pubSubBatchDuration == null) {
+      let packet = {
+        sender: options.instanceId || null,
+        messages: [data],
+      };
+      (async () => {
+        try {
+          await clusterClient.invokePublish(channel, packet);
+        } catch (error) {
+          clusterClient.emit('error', {error});
+        }
+      })();
+    } else {
+      if (!publishOutboundBuffer[channel]) {
+        publishOutboundBuffer[channel] = [];
+      }
+      publishOutboundBuffer[channel].push(data);
+
+      if (!publishTimeout) {
+        publishTimeout = setTimeout(flushPublishOutboundBuffer, options.pubSubBatchDuration);
+      }
+    }
+  };
+
+  let maxPendingPublishCount = options.maxPendingPublishCount || DEFAULT_MAX_PENDING_PUBLISH_COUNT;
+  let maxPendingPublishAge = options.maxPendingPublishAge || DEFAULT_MAX_PENDING_PUBLISH_AGE;
+
+  // A publish before the state server has sent the broker list has no scc-broker to go to,
+  // so it waits here for one. This is for the gap between attaching and joining the cluster;
+  // a message which waits longer than maxPendingPublishAge is dropped rather than delivered
+  // late, because a state server which stays down is an outage rather than a startup gap.
+  let pendingPublishBuffer = [];
+
+  let queuePendingPublish = (channel, data) => {
+    pendingPublishBuffer.push({channel, data, time: Date.now()});
+    if (pendingPublishBuffer.length > maxPendingPublishCount) {
+      pendingPublishBuffer.splice(0, pendingPublishBuffer.length - maxPendingPublishCount);
+    }
+  };
+
+  let flushPendingPublishBuffer = () => {
+    let flushedPublishList = pendingPublishBuffer;
+    pendingPublishBuffer = [];
+    let oldestAllowedPublishTime = Date.now() - maxPendingPublishAge;
+    flushedPublishList.forEach(({channel, data, time}) => {
+      if (time >= oldestAllowedPublishTime) {
+        publishToCluster(channel, data);
+      }
+    });
+  };
+
+  (async () => {
+    for await (let event of clusterClient.listener('updateBrokers')) {
+      flushPendingPublishBuffer();
+    }
+  })();
+
   (async () => {
     for await (let {channel, data} of broker.listener('publish')) {
-      if (options.pubSubBatchDuration == null) {
-        let packet = {
-          sender: options.instanceId || null,
-          messages: [data],
-        };
-        (async () => {
-          try {
-            await clusterClient.invokePublish(channel, packet);
-          } catch (error) {
-            clusterClient.emit('error', {error});
-          }
-        })();
+      // A publish which arrives while the buffer still holds messages waits its turn, or it
+      // would overtake them and reach the cluster out of order.
+      if (clusterClient.isReady && !pendingPublishBuffer.length) {
+        publishToCluster(channel, data);
       } else {
-        if (!publishOutboundBuffer[channel]) {
-          publishOutboundBuffer[channel] = [];
-        }
-        publishOutboundBuffer[channel].push(data);
-
-        if (!publishTimeout) {
-          publishTimeout = setTimeout(flushPublishOutboundBuffer, options.pubSubBatchDuration);
-        }
+        queuePendingPublish(channel, data);
       }
     }
   })();
